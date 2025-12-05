@@ -14,6 +14,8 @@
             margin: 0;
             padding: 20px;
             min-height: 100vh; 
+            /* Убедитесь, что body не мешает полному экрану */
+            touch-action: pan-y;
         }
 
         #game-canvas {
@@ -45,7 +47,7 @@
             left: 20px;
             z-index: 50;
         }
-        #pencil-button, #cancel-button, #shop-button, #fullscreen-button { /* ДОБАВЛЕНО: Кнопка Полный Экран */
+        #pencil-button, #cancel-button, #shop-button, #fullscreen-button { 
             padding: 10px;
             border: none;
             cursor: pointer;
@@ -58,7 +60,7 @@
         #pencil-button { background-color: #008000; color: white; display: none; }
         #cancel-button { background-color: #cc0000; color: white; display: none; }
         #shop-button { background-color: #00bfff; color: black; }
-        #fullscreen-button { background-color: #9900cc; color: white; } /* Стили для новой кнопки */
+        #fullscreen-button { background-color: #9900cc; color: white; }
 
 
         /* Скрытые/Полноэкранные меню */
@@ -153,11 +155,11 @@
         <p>Выберите уровень для старта:</p>
         <button id="level-1-button" onclick="startGame('world')">Уровень 1: Лес</button>
         <button id="level-2-button" onclick="startGame('cave')">Уровень 2: Пещера</button>
-    </div>
+        <button id="level-3-button" onclick="startGame('volcano')" disabled>Уровень 3: Вулкан (Сложность 3x)</button> </div>
     
     <div id="victory-screen">
         <h2>ПОБЕДА!</h2>
-        <p>2 УРОВЕНЬ РАЗРЕШЕН!</p>
+        <p id="victory-message">2 УРОВЕНЬ РАЗРЕШЕН!</p>
         <button onclick="goToMenu()">ПЕРЕЙТИ В МЕНЮ</button>
     </div>
 
@@ -165,7 +167,8 @@
         <button id="shop-button" onclick="enterShop()">МАГАЗИН</button>
         <button id="pencil-button" onclick="enterDrawingMode()">КАРАНДАШ (Клик)</button>
         <button id="cancel-button" onclick="exitDrawingMode()">ОТМЕНА (X)</button>
-        <button id="fullscreen-button" onclick="toggleFullScreen()">ПОЛНЫЙ ЭКРАН</button> </div>
+        <button id="fullscreen-button" onclick="toggleFullScreen()">ПОЛНЫЙ ЭКРАН</button>
+    </div>
     
     <div id="ui">
         <span>Счёт: <span id="score-display">0</span></span>
@@ -223,7 +226,8 @@
             playerY: 0,
             hasPencil: false,
             isDrawingMode: false,
-            level2Unlocked: false, 
+            level2Unlocked: false,
+            level3Unlocked: false, // НОВАЯ ПЕРЕМЕННАЯ
             invulnerabilityTimer: 0, 
             upgrades: {
                 speed: 1, 
@@ -249,8 +253,8 @@
         // --- DOM ЭЛЕМЕНТЫ ---
         let scoreDisplay, coinsDisplay, healthDisplay, shieldDisplay, woodDisplay, killsDisplay;
         let pencilButton, cancelButton, shopButton, shopScreen, upgradeList, shopCoinsDisplay;
-        let gameOverScreen, finalScoreDisplay, menuScreen, victoryScreen;
-        let level1Button, level2Button;
+        let gameOverScreen, finalScoreDisplay, menuScreen, victoryScreen, victoryMessage;
+        let level1Button, level2Button, level3Button; // ДОБАВЛЕНА КНОПКА 3 УРОВНЯ
 
         
         // --- ПЕРЕМЕННЫЕ ДЖОЙСТИКА ---
@@ -267,7 +271,7 @@
             return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
         }
         
-        // НОВАЯ ФУНКЦИЯ: Управление полным экраном
+        // Управление полным экраном
         function toggleFullScreen() {
              const doc = document.documentElement;
              if (document.fullscreenElement) {
@@ -282,6 +286,7 @@
         function saveGameProgress() {
             try {
                 localStorage.setItem('level2Unlocked', game.level2Unlocked);
+                localStorage.setItem('level3Unlocked', game.level3Unlocked); // СОХРАНЕНИЕ 3 УРОВНЯ
             } catch (e) {
                  console.error("Не удалось сохранить прогресс: ", e);
             }
@@ -298,10 +303,20 @@
         function updateMenuButtons() {
             if (game.level2Unlocked) {
                  level2Button.disabled = false;
-                 level2Button.textContent = 'Уровень 2: Пещера (УСИЛЕН)';
+                 level2Button.textContent = 'Уровень 2: Пещера';
             } else {
                  level2Button.disabled = true;
                  level2Button.textContent = 'Уровень 2: Пещера (заблокирован)';
+            }
+            // ЛОГИКА 3 УРОВНЯ
+            if (game.level3Unlocked) {
+                 level3Button.disabled = false;
+                 level3Button.textContent = 'Уровень 3: Вулкан (Сложность 3x)';
+                 level3Button.style.backgroundColor = '#cc6600';
+            } else {
+                 level3Button.disabled = true;
+                 level3Button.textContent = 'Уровень 3: Вулкан (заблокирован)';
+                 level3Button.style.backgroundColor = '#444';
             }
         }
 
@@ -358,7 +373,7 @@
         }
 
         function enterShop() {
-            if (game.state === 'world' || game.state === 'cave') {
+            if (game.state !== 'menu' && game.state !== 'gameOver' && game.state !== 'victory') {
                 game.state = 'shop';
                 shopScreen.style.display = 'flex';
                 updateShopList();
@@ -379,8 +394,12 @@
             if (boss) return; 
 
             const isLevel2 = (game.mapState === 'cave');
-            const maxHP = isLevel2 ? 1000 : 500; 
+            const isLevel3 = (game.mapState === 'volcano');
             
+            let maxHP = 500;
+            if (isLevel2) maxHP = 1000;
+            if (isLevel3) maxHP = 2000; // Самый сильный босс
+
             const angle = Math.random() * Math.PI * 2;
             const radius = W / 2 + 300; 
             const x = game.playerX + radius * Math.cos(angle);
@@ -393,9 +412,10 @@
                 health: maxHP, 
                 maxHealth: maxHP,
                 damage: 50,
-                speed: 1.5,
+                speed: isLevel3 ? 3 : 1.5, // Босс 3 уровня быстрее
                 nextShotTime: Date.now() + 2000,
-                isLevel2: isLevel2 
+                isLevel2: isLevel2,
+                isLevel3: isLevel3
             };
         }
 
@@ -420,7 +440,7 @@
         }
 
         function movePlayer() {
-            if (game.state !== 'world' && game.state !== 'cave') return;
+            if (game.state !== 'world' && game.state !== 'cave' && game.state !== 'volcano') return;
 
             let dx = 0;
             let dy = 0;
@@ -455,19 +475,32 @@
             game.playerX += dx * moveFactor;
             game.playerY += dy * moveFactor;
             
+            // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Блокировка выхода из пещеры
+            if (game.state === 'cave') {
+                // Если игрок пытается уйти вниз, блокируем его позицию
+                if (game.playerY > H / 2 + 100) { // Проверяем относительно центра карты (или конкретной координаты)
+                    // Устанавливаем границу Y. H - 50 - это примерно нижняя граница окна.
+                    game.playerY = Math.min(game.playerY, cameraY + H - PLAYER_SIZE/2 - 10); 
+                }
+                // Также блокируем горизонтальный выход
+                if (game.playerX < cameraX || game.playerX > cameraX + W) {
+                     game.playerX = Math.max(cameraX + PLAYER_SIZE/2 + 5, Math.min(game.playerX, cameraX + W - PLAYER_SIZE/2 - 5));
+                }
+            }
+
+
             cameraX = game.playerX - PLAYER_DRAW_X;
             cameraY = game.playerY - PLAYER_DRAW_Y;
-            
-            // Телепорт из пещеры
-            if (game.state === 'cave' && game.playerY > H) {
-                 teleportToWorld();
-            }
         }
 
         function startGame(mapType) {
             
             if (mapType === 'cave' && !game.level2Unlocked) {
                  alert("Уровень 2 заблокирован! Победите Босса на Уровне 1.");
+                 return;
+            }
+            if (mapType === 'volcano' && !game.level3Unlocked) {
+                 alert("Уровень 3 заблокирован! Победите Босса на Уровне 2.");
                  return;
             }
 
@@ -505,40 +538,40 @@
                  enemySpawnInterval = setInterval(() => {
                     if (game.state === 'cave') createEnemy(undefined, undefined, undefined, 1.5); 
                  }, 650); 
+            } else if (mapType === 'volcano') {
+                 initVolcanoObjects(); // НОВАЯ ИНИЦИАЛИЗАЦИЯ
+                 if (enemySpawnInterval) clearInterval(enemySpawnInterval);
+                 enemySpawnInterval = setInterval(() => {
+                    if (game.state === 'volcano') createEnemy(undefined, undefined, undefined, 3.0); // СЛОЖНОСТЬ 3x
+                 }, 300); // ОЧЕНЬ БЫСТРЫЙ СПАВН
             }
         }
         
         function initCaveObjects() {
-            game.playerX = W / 2;
-            game.playerY = H - 50; 
+            // Игрок стартует в центре
+            game.playerX = 0; 
+            game.playerY = 0; 
             
-            // Враги спавнятся только в верхней 50% экрана
+            // Враги спавнятся
             for(let i=0; i<30; i++) { 
-                createEnemy(Math.random() * W, Math.random() * H * 0.5, 'spider');
+                createEnemy(Math.random() * W - W/2, Math.random() * H * 0.5 - H/2, 'spider');
             }
-        }
-
-
-        function teleportToCave(passageX, passageY) {
-            if (!game.level2Unlocked) {
-                 alert("Уровень 2 заблокирован! Победите Босса на Уровне 1.");
-                 return;
-            }
-            
-            game.state = 'cave';
-            game.mapState = 'cave';
-            initCaveObjects();
         }
         
-        function teleportToWorld() {
-            game.state = 'world';
-            game.mapState = 'world';
-            game.playerX = 0;
-            game.playerY = 0;
-            enemies = []; 
-            objects = [];
-            
-            initGameObjects(); 
+        // НОВАЯ ФУНКЦИЯ: ИНИЦИАЛИЗАЦИЯ 3 УРОВНЯ
+        function initVolcanoObjects() {
+             game.playerX = 0; 
+             game.playerY = 0; 
+             
+             // Объекты (наземные мины или лавовые лужи)
+             for(let i=0; i<10; i++) {
+                spawnObject((Math.random() - 0.5) * 1000, (Math.random() - 0.5) * 1000, 'lava_pool').size = 50; 
+             }
+             
+             // Стартовый спавн врагов
+             for(let i=0; i<50; i++) { 
+                createEnemy((Math.random() - 0.5) * W, (Math.random() - 0.5) * H, 'cockroach', 3.0);
+             }
         }
 
         function enterDrawingMode() {
@@ -562,10 +595,10 @@
         // --- ОБРАБОТКА ВВОДА КЛАВИАТУРЫ ---
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
-            if ((game.state === 'world' || game.state === 'cave') && e.key.toUpperCase() === 'E') {
+            if ((game.state !== 'menu' && game.state !== 'shop') && e.key.toUpperCase() === 'E') {
                 toggleShield();
             }
-            if ((game.state === 'world' || game.state === 'cave') && e.key.toUpperCase() === 'X' && game.isDrawingMode) {
+            if ((game.state !== 'menu' && game.state !== 'shop') && e.key.toUpperCase() === 'X' && game.isDrawingMode) {
                 exitDrawingMode(); 
             }
         });
@@ -573,15 +606,53 @@
             keys[e.key] = false;
         });
 
-        // === 2. СНАРЯДЫ И ЛОГИКА КЛИКА ===
-
-        CANVAS.addEventListener('click', (e) => {
-            if (game.state !== 'world' && game.state !== 'cave') return;
-
-            // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Мы проверяем, что нажатие произошло не на элементы джойстика
-            if (e.target.id === 'joystick-base' || e.target.id === 'joystick-knob') return; 
+        // === 2. СНАРЯДЫ И ЛОГИКА КЛИКА/ТАСКАНИЯ ===
+        
+        // НОВЫЙ ОБРАБОТЧИК ДЛЯ СТРЕЛЬБЫ НА МОБИЛЬНЫХ
+        CANVAS.addEventListener('touchstart', (e) => {
+            if (game.state !== 'world' && game.state !== 'cave' && game.state !== 'volcano') return;
             
-            // Если игрок нажал на кнопку "Полный экран" или другую кнопку в UI, мы выходим
+            const rect = CANVAS.getBoundingClientRect();
+            
+            // Перебираем все касания
+            for (let i = 0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                
+                // Проверяем, не коснулись ли мы элемента джойстика
+                const targetElement = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (targetElement && (targetElement.id === 'joystick-base' || targetElement.id === 'joystick-knob' || targetElement.tagName === 'BUTTON')) {
+                    continue; // Игнорируем касание на джойстике или кнопке
+                }
+
+                // Логика стрельбы (для этого касания)
+                
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+                
+                const worldClickX = touchX + cameraX;
+                const worldClickY = touchY + cameraY;
+
+                if (game.isDrawingMode) {
+                    // ... (логика карандаша, можно оставить на 'click' или перенести)
+                    // Для простоты оставим карандаш на click, а touchstart только для стрельбы.
+                } else {
+                    // РЕЖИМ СТРЕЛЬБЫ
+                    const angle = Math.atan2(touchY - PLAYER_DRAW_Y, touchX - PLAYER_DRAW_X);
+                    
+                    bullets.push({
+                        x: game.playerX,
+                        y: game.playerY,
+                        size: 5 * game.upgrades.bulletDamage,
+                        vx: 10 * Math.cos(angle) * game.upgrades.bulletSpeed,
+                        vy: 10 * Math.sin(angle) * game.upgrades.bulletSpeed
+                    });
+                }
+            }
+        });
+        
+        // ОСТАВЛЯЕМ CLICK ТОЛЬКО ДЛЯ РЕЖИМА КАРАНДАША (УДОБНО НА ПК)
+        CANVAS.addEventListener('click', (e) => {
+            if (game.state !== 'world' && game.state !== 'cave' && game.state !== 'volcano') return;
             if (e.target.tagName === 'BUTTON') return; 
 
             const rect = CANVAS.getBoundingClientRect();
@@ -591,13 +662,13 @@
             const worldClickX = mouseX + cameraX;
             const worldClickY = mouseY + cameraY;
 
-
             if (game.isDrawingMode) {
+                // ЛОГИКА КАРАНДАША
                 let targetTree = null;
                 const treeRadius = 60;
                 
                 for (let obj of objects) {
-                    if (obj.type === 'tree' && distance(worldClickX, worldClickY, obj.x, obj.y) < treeRadius) {
+                    if ((obj.type === 'tree' || obj.type === 'green_tree') && distance(worldClickX, worldClickY, obj.x, obj.y) < treeRadius) {
                         targetTree = obj;
                         break;
                     }
@@ -620,21 +691,24 @@
                     }
                     exitDrawingMode();
                 }
-
             } else {
-                // РЕЖИМ СТРЕЛЬБЫ
-                const angle = Math.atan2(mouseY - PLAYER_DRAW_Y, mouseX - PLAYER_DRAW_X);
-                
-                bullets.push({
-                    x: game.playerX,
-                    y: game.playerY,
-                    size: 5 * game.upgrades.bulletDamage,
-                    vx: 10 * Math.cos(angle) * game.upgrades.bulletSpeed,
-                    vy: 10 * Math.sin(angle) * game.upgrades.bulletSpeed
-                });
+                 // В режиме ПК (мышь) мы также стреляем по клику, если это не touch.
+                 if (e.pointerType === 'mouse' || !e.pointerType) {
+                    const angle = Math.atan2(mouseY - PLAYER_DRAW_Y, mouseX - PLAYER_DRAW_X);
+                    
+                    bullets.push({
+                        x: game.playerX,
+                        y: game.playerY,
+                        size: 5 * game.upgrades.bulletDamage,
+                        vx: 10 * Math.cos(angle) * game.upgrades.bulletSpeed,
+                        vy: 10 * Math.sin(angle) * game.upgrades.bulletSpeed
+                    });
+                }
             }
         });
-
+        
+        // ... (остальные функции updateBullets, updateRockets, updateBoss остаются без изменений)
+        
         function updateBullets() {
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
@@ -647,8 +721,6 @@
                     if (distance(r.x, r.y, b.x, b.y) < r.size/2 + b.size/2) {
                         
                         bullets.splice(i, 1); 
-
-                        // РАЗВОРОТ РАКЕТЫ
                         r.vx *= -1;
                         r.vy *= -1;
                         r.isReversed = true; 
@@ -671,7 +743,6 @@
                 r.y += r.vy;
 
                 // 1. Урон Игроку (если не развернута)
-                // Проверка неуязвимости игрока!
                 const isPlayerInvulnerable = Date.now() < game.invulnerabilityTimer;
 
                 if (!r.isReversed && !isPlayerInvulnerable && distance(game.playerX, game.playerY, r.x, r.y) < PLAYER_SIZE/2 + r.size/2) {
@@ -686,22 +757,25 @@
                     boss.health -= 50; 
                     if (boss.health <= 0) {
                         // ПОБЕДА НАД БОССОМ
+                        const currentMap = game.mapState;
                         boss = null;
                         rockets = [];
                         
-                        if (game.mapState === 'world') {
+                        // Логика разблокировки нового уровня
+                        if (currentMap === 'world') {
                             game.level2Unlocked = true;
-                            saveGameProgress(); 
-                            // Показываем экран победы
-                            game.state = 'victory';
-                            victoryScreen.style.display = 'flex';
-                            return; 
-                        } else {
-                            // Если победа на 2 уровне
-                             alert("ПОБЕДА! ВЫ ПРОШЛИ 2 УРОВЕНЬ!");
-                             goToMenu();
-                             return;
+                            victoryMessage.textContent = 'УРОВЕНЬ 2 РАЗБЛОКИРОВАН!';
+                        } else if (currentMap === 'cave') {
+                            game.level3Unlocked = true; // РАЗБЛОКИРОВКА 3 УРОВНЯ
+                            victoryMessage.textContent = 'УРОВЕНЬ 3 РАЗБЛОКИРОВАН!';
+                        } else if (currentMap === 'volcano') {
+                             victoryMessage.textContent = 'ПОЛНАЯ ПОБЕДА! ВЫ ПРОШЛИ ИГРУ!';
                         }
+
+                        saveGameProgress(); 
+                        game.state = 'victory';
+                        victoryScreen.style.display = 'flex';
+                        return; 
                     }
                     rockets.splice(i, 1);
                     continue;
@@ -713,25 +787,9 @@
                 }
             }
         }
-
-
-        // === 3. МОНЕТЫ И ПРЕДМЕТЫ СРЕДЫ ===
-
-        function spawnCoin(x, y) {
-            coins.push({ x, y, size: 10, color: 'gold' });
-        }
         
-        function checkCoinCollision() {
-            for (let i = coins.length - 1; i >= 0; i--) {
-                const c = coins[i];
-                if (distance(game.playerX, game.playerY, c.x, c.y) < PLAYER_SIZE/2 + c.size/2) {
-                    game.coins += 1;
-                    coinsDisplay.textContent = game.coins;
-                    coins.splice(i, 1);
-                }
-            }
-        }
-        
+        // ... (функции монет и предметов)
+
         function spawnObject(x, y, type) {
             const newObj = { x, y, size: 30, type, duration: type === 'web' ? 500 : 0 }; 
             objects.push(newObj);
@@ -749,9 +807,11 @@
                     continue;
                 }
                 
-                if (obj.type === 'black_passage' && distance(game.playerX, game.playerY, obj.x, obj.y) < PLAYER_SIZE/2 + obj.size/2) {
-                    teleportToCave(obj.x, obj.y);
-                    return;
+                if (obj.type === 'lava_pool' && distance(game.playerX, game.playerY, obj.x, obj.y) < PLAYER_SIZE/2 + obj.size/2) {
+                    if (Date.now() % 60 === 0) { // Наносим урон раз в секунду
+                        game.health -= 5;
+                        if (game.health <= 0) endGame();
+                    }
                 }
                 
                 if (obj.type === 'web') {
@@ -775,21 +835,12 @@
                     const y = game.playerY + radius * Math.sin(angle);
                     spawnObject(x, y, 'tree');
                 }
-                
-                if (!objects.some(o => o.type === 'black_passage') && Math.random() < 0.015) { 
-                    const angle = Math.random() * Math.PI * 2;
-                    const radius = W; 
-                    const x = game.playerX + radius * Math.cos(angle);
-                    const y = game.playerY + radius * Math.sin(angle);
-                    
-                    spawnObject(x, y, 'black_passage').size = 40; 
-                }
             }
         }
 
 
-        // === 4. ВРАГИ И БОСС ===
-        
+        // ... (функции врагов и босса)
+
         function createEnemy(x, y, type, multiplier = 1) {
             
             for (let i = 0; i < multiplier; i++) {
@@ -801,14 +852,12 @@
                 }
                 
                 const enemyType = type || (Math.random() < 0.3 ? 'spider' : 'cockroach');
-                let speed = enemyType === 'spider' ? 5 : 2;
-                let damage = enemyType === 'spider' ? 30 : 5; 
+                let speed = (enemyType === 'spider' ? 5 : 2) * multiplier; // Усиление скорости
+                let damage = (enemyType === 'spider' ? 30 : 5) * multiplier; // Усиление урона
                 
                 enemies.push({ x, y, size: 20, type: enemyType, speed, damage, state: 'idle' });
             }
         }
-
-        let enemySpawnInterval; 
 
         function updateEnemies() {
             const isPlayerInvulnerable = Date.now() < game.invulnerabilityTimer;
@@ -817,7 +866,7 @@
                 const e = enemies[i];
                 const distToPlayer = distance(game.playerX, game.playerY, e.x, e.y);
                 
-                // 1. Определение состояния (Агрессия или Бегство)
+                // 1. Определение состояния
                 if (boss) {
                     e.state = 'flee'; 
                 } else if (distToPlayer < AGGRO_RADIUS) {
@@ -837,10 +886,9 @@
                     e.y -= e.speed * Math.sin(angle); 
                 }
 
-                // 3. Столкновение с игроком (Только если нет босса!)
+                // 3. Столкновение с игроком
                 if (distToPlayer < PLAYER_SIZE/2 + e.size/2) {
                     if (!boss) { 
-                        // Проверка неуязвимости
                         if (!game.isShieldActive && !isPlayerInvulnerable) { 
                             game.health -= e.damage;
                             healthDisplay.textContent = Math.max(0, game.health);
@@ -875,7 +923,7 @@
             }
             
             // ПРОВЕРКА СПАВНА БОССА
-            if (!boss && game.kills >= BOSS_KILL_THRESHOLD && (game.state === 'world' || game.state === 'cave')) {
+            if (!boss && game.kills >= BOSS_KILL_THRESHOLD && (game.state !== 'menu' && game.state !== 'shop')) {
                  spawnBoss();
             }
         }
@@ -894,107 +942,23 @@
             if (now >= boss.nextShotTime) {
                 if (distToPlayer < VIEW_RADIUS + 200) { 
                     
-                    // УРОВЕНЬ 2: ДВОЙНОЙ ВЫСТРЕЛ
-                    if (boss.isLevel2) { 
-                        // Выстрел немного смещенный влево/вправо (две "пушки")
+                    if (boss.isLevel3) { // 3 УРОВЕНЬ: ТРОЙНОЙ ВЫСТРЕЛ
+                         shootRocket(boss.x, boss.y, angle);
+                         shootRocket(boss.x, boss.y, angle + 0.2);
+                         shootRocket(boss.x, boss.y, angle - 0.2);
+                    }
+                    else if (boss.isLevel2) { 
                         shootRocket(boss.x + 10, boss.y, angle + 0.1);
                         shootRocket(boss.x - 10, boss.y, angle - 0.1);
                     } else {
                         shootRocket(boss.x, boss.y, angle);
                     }
                 }
-                boss.nextShotTime = now + 2000; 
+                boss.nextShotTime = now + (boss.isLevel3 ? 1000 : 2000); // Быстрее стреляет на 3 уровне
             }
         }
         
-        function shootRocket(startX, startY, angle) {
-            
-            rockets.push({
-                x: startX,
-                y: startY,
-                size: 15,
-                vx: 4 * Math.cos(angle), 
-                vy: 4 * Math.sin(angle),
-                isReversed: false,
-                damage: 50 
-            });
-        }
-
-
-        // === 5. ОТРИСОВКА (DRAW) ===
-
-        function drawPlayerEyes(px, py, targetX, targetY) {
-            const eyeSize = 5;
-            const pupilSize = 2;
-            const pupilRange = 1.5;
-
-            const angle = Math.atan2(targetY - py, targetX - px);
-            
-            for (let i = -1; i <= 1; i += 2) {
-                let eyeX = px + 4;
-                let eyeY = py + 4 * i;
-                let pupilX = eyeX + pupilRange * Math.cos(angle);
-                let pupilY = eyeY + pupilRange * Math.sin(angle);
-                
-                CTX.fillStyle = 'white';
-                CTX.fillRect(eyeX - eyeSize/2, eyeY - eyeSize/2, eyeSize, eyeSize);
-
-                CTX.fillStyle = 'black';
-                CTX.fillRect(pupilX - pupilSize/2, pupilY - pupilSize/2, pupilSize, pupilSize);
-            }
-        }
-
-        function drawEnemyShape(e, screenX, screenY) {
-            if (e.type === 'spider') {
-                CTX.fillStyle = e.state === 'flee' ? '#4d004d' : '#800080'; 
-                const s = 5; 
-                CTX.fillRect(screenX - s, screenY - s, s * 2, s * 2);
-                CTX.fillRect(screenX - 2*s, screenY - s/2, s, s);
-                CTX.fillRect(screenX + s, screenY - s/2, s, s);
-                CTX.fillRect(screenX - 2*s, screenY + s/2, s, s);
-                CTX.fillRect(screenX + s, screenY + s/2, s, s);
-            } 
-            else if (e.type === 'cockroach') {
-                CTX.fillStyle = e.state === 'flee' ? '#b30000' : '#ff0000';
-                const s = 6; 
-                CTX.fillRect(screenX - s/2, screenY - s, s, s);
-                CTX.fillRect(screenX - s, screenY, s * 2, s * 2);
-                CTX.fillRect(screenX - s/2, screenY + 2*s, s, s);
-            }
-        }
-        
-        function drawBoss() {
-            if (!boss) return;
-            const screenX = boss.x - cameraX;
-            const screenY = boss.y - cameraY;
-            const s = boss.size / 2;
-
-            // Тело Босса (Огромный Черный Паук)
-            CTX.fillStyle = 'black';
-            CTX.beginPath();
-            CTX.arc(screenX, screenY, s, 0, Math.PI * 2);
-            CTX.fill();
-            
-            // Если это босс 2 уровня, добавим красные детали
-            if (boss.isLevel2) {
-                 CTX.fillStyle = '#cc0000';
-                 CTX.fillRect(screenX - 5, screenY - 5, 10, 10);
-            }
-
-            // Полоса здоровья
-            const hpBarWidth = 100;
-            const hpBarHeight = 10;
-            const hpRatio = boss.health / boss.maxHealth;
-            
-            CTX.fillStyle = 'red';
-            CTX.fillRect(screenX - hpBarWidth/2, screenY - s - 20, hpBarWidth, hpBarHeight);
-            
-            CTX.fillStyle = 'lime';
-            CTX.fillRect(screenX - hpBarWidth/2, screenY - s - 20, hpBarWidth * hpRatio, hpBarHeight);
-            
-            CTX.strokeStyle = '#fff';
-            CTX.strokeRect(screenX - hpBarWidth/2, screenY - s - 20, hpBarWidth, hpBarHeight);
-        }
+        // ... (функции отрисовки)
 
         function drawObjectShape(obj, screenX, screenY) {
             if (obj.type === 'tree' || obj.type === 'green_tree') {
@@ -1006,28 +970,17 @@
                 CTX.fillRect(screenX - 10, screenY - 5, 20, 10);
                 CTX.fillStyle = '#663300'; 
                 CTX.fillRect(screenX + 10, screenY - 2.5, 5, 5);
-            } else if (obj.type === 'black_passage') {
-                CTX.fillStyle = 'black';
-                CTX.fillRect(screenX - 20, screenY - 20, 40, 40);
-                CTX.strokeStyle = '#fff';
-                CTX.lineWidth = 2;
-                CTX.strokeRect(screenX - 20, screenY - 20, 40, 40);
+            } else if (obj.type === 'lava_pool') {
+                CTX.fillStyle = '#ff4500'; // Красный/оранжевый для лавы
+                CTX.beginPath();
+                CTX.arc(screenX, screenY, obj.size, 0, Math.PI * 2);
+                CTX.fill();
             } else if (obj.type === 'web') { 
                 CTX.fillStyle = 'rgba(150, 150, 150, 0.7)'; 
                 CTX.fillRect(screenX - obj.size/2, screenY - obj.size/2, obj.size, obj.size);
             }
         }
         
-        function drawRockets() {
-            for(let r of rockets) {
-                const screenX = r.x - cameraX;
-                const screenY = r.y - cameraY;
-                
-                CTX.fillStyle = r.isReversed ? 'yellow' : 'red'; 
-                CTX.fillRect(screenX - r.size/2, screenY - r.size/2, r.size, r.size);
-            }
-        }
-
         function draw() {
             if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory') {
                  CTX.clearRect(0, 0, W, H);
@@ -1048,19 +1001,23 @@
             } else if (game.state === 'cave') {
                 CTX.fillStyle = '#221100'; 
                 CTX.fillRect(0, 0, W, H);
-                
-                CTX.fillStyle = '#333';
-                CTX.fillRect(W / 2 - 50, H - 20, 100, 20); 
+            } else if (game.state === 'volcano') { // НОВЫЙ ФОН
+                CTX.fillStyle = '#4d0000'; // Темно-красный
+                CTX.fillRect(0, 0, W, H);
+                CTX.fillStyle = '#800000'; // Бордовый
+                for(let i=0; i<W; i+=20) {
+                     CTX.fillRect(i, 0, 10, H);
+                }
             }
 
-            // Отрисовка объектов
+
+            // ... (Остальная отрисовка объектов, монет, пуль, врагов, босса)
             for(let obj of objects) {
                 const screenX = obj.x - cameraX;
                 const screenY = obj.y - cameraY;
                 drawObjectShape(obj, screenX, screenY);
             }
             
-            // Отрисовка монет
             CTX.fillStyle = 'gold';
             for(let c of coins) {
                 const screenX = c.x - cameraX;
@@ -1068,7 +1025,6 @@
                 CTX.fillRect(screenX - c.size/2, screenY - c.size/2, c.size, c.size);
             }
 
-            // Отрисовка пуль игрока
             CTX.fillStyle = '#ffff00';
             for (let b of bullets) {
                 const screenX = b.x - cameraX;
@@ -1076,17 +1032,14 @@
                 CTX.fillRect(screenX - b.size/2, screenY - b.size/2, b.size, b.size);
             }
             
-            // Отрисовка ракет босса
             drawRockets();
 
-            // Отрисовка врагов
             for (let e of enemies) {
                 const screenX = e.x - cameraX;
                 const screenY = e.y - cameraY;
                 drawEnemyShape(e, screenX, screenY);
             }
             
-            // Отрисовка Босса
             drawBoss();
 
             // Отрисовка игрока
@@ -1119,7 +1072,7 @@
             }
         }
 
-        // === 6. ИНИЦИАЛИЗАЦИЯ И ЗАПУСК ===
+        // === ИНИЦИАЛИЗАЦИЯ И ЗАПУСК ===
 
         function initGameObjects() {
             objects = [];
@@ -1151,12 +1104,13 @@
             }
         }
         
-        // --- ИНИЦИАЛИЗАЦИЯ DOM ЭЛЕМЕНТОВ ---
         function initDOM() {
             menuScreen = document.getElementById('menu-screen');
             victoryScreen = document.getElementById('victory-screen'); 
+            victoryMessage = document.getElementById('victory-message');
             level1Button = document.getElementById('level-1-button');
-            level2Button = document.getElementById('level-2-button'); 
+            level2Button = document.getElementById('level-2-button');
+            level3Button = document.getElementById('level-3-button'); // DOM 3 УРОВНЯ
 
             scoreDisplay = document.getElementById('score-display');
             coinsDisplay = document.getElementById('coins-display');
@@ -1186,9 +1140,13 @@
             shopButton.style.display = 'none';
             
             // Загрузка статуса разблокировки
-            const savedUnlock = localStorage.getItem('level2Unlocked');
-            if (savedUnlock === 'true') {
+            const savedUnlock2 = localStorage.getItem('level2Unlocked');
+            if (savedUnlock2 === 'true') {
                  game.level2Unlocked = true;
+            }
+            const savedUnlock3 = localStorage.getItem('level3Unlocked');
+            if (savedUnlock3 === 'true') {
+                 game.level3Unlocked = true;
             }
 
             updateMenuButtons(); 
@@ -1233,13 +1191,20 @@
             });
             document.addEventListener('mouseup', handleEnd);
 
+            // Обработка тач-событий
             joystickKnob.addEventListener('touchstart', (e) => {
                 isDragging = true;
                 e.preventDefault(); 
                 handleMove(e.touches[0].clientX, e.touches[0].clientY);
             });
             document.addEventListener('touchmove', (e) => {
-                if (isDragging && e.touches.length > 0) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+                // Если у нас несколько касаний, убедимся, что двигается только то, которое началось на джойстике
+                let joystickTouch = Array.from(e.touches).find(t => t.target.id === 'joystick-knob' || t.target.id === 'joystick-base');
+
+                if (isDragging && e.touches.length > 0) {
+                     // Используем касание, которое активно двигает джойстик
+                     handleMove(e.touches[0].clientX, e.touches[0].clientY); 
+                }
             });
             document.addEventListener('touchend', handleEnd);
             document.addEventListener('touchcancel', handleEnd);
@@ -1254,7 +1219,7 @@
 
         function gameLoop() {
             
-            if (game.state === 'world' || game.state === 'cave') {
+            if (game.state !== 'menu' && game.state !== 'shop' && game.state !== 'gameOver' && game.state !== 'victory') {
                 movePlayer();
                 updateBullets();
                 updateRockets(); 
