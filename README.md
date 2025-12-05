@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Pixel Hunter: Compact Biome Menu</title>
+    <title>Pixel Hunter: Compact Biome Menu (Boss Fix)</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -306,7 +306,9 @@
             health: 100,
             coins: 0,
             wood: 0, 
-            kills: 0, 
+            kills: 0, // Общий счетчик убийств за сессию
+            killsToBoss: 50, // НОВОЕ: Цель для спавна босса
+            totalKillsSinceBoss: 0, // НОВОЕ: Счетчик убийств с последнего босса
             isShieldActive: false,
             playerX: 0, 
             playerY: 0,
@@ -653,7 +655,8 @@
                 game.playerY = 0;
                 game.health = 100;
                 game.kills = 0;
-                
+                game.totalKillsSinceBoss = 0; // Сброс счетчика убийств для босса
+
                 game.invulnerabilityTimer = Date.now() + 1000; 
                 burnEffect.active = false; 
                 poisonEffect.active = false; 
@@ -854,6 +857,7 @@
                         const e = enemies[i];
                         if (distance(targetTree.x, targetTree.y, e.x, e.y) < killRadius && (e.type === 'spider' || e.type === 'ice_spider')) {
                             game.kills++; 
+                            game.totalKillsSinceBoss++; // Учитываем убийство моба для босса
                             spawnCoin(e.x, e.y);
                             enemies.splice(i, 1);
                         }
@@ -1148,6 +1152,14 @@
                     if (distance(e.x, e.y, b.x, b.y) < e.size/2) {
                         game.score += 10;
                         game.kills++; 
+                        game.totalKillsSinceBoss++; // !!! НОВОЕ: Увеличиваем счетчик для босса
+
+                        // Проверяем, нужно ли спавнить босса
+                        if (game.totalKillsSinceBoss >= game.killsToBoss) {
+                            spawnBoss();
+                            game.totalKillsSinceBoss = 0; // Сбрасываем счетчик после спавна
+                        }
+
                         spawnCoin(e.x, e.y); 
                         enemies.splice(i, 1);
                         bullets.splice(j, 1);
