@@ -14,7 +14,6 @@
             margin: 0;
             padding: 20px;
             min-height: 100vh; 
-            /* Важно для предотвращения конфликтов прокрутки/зума */
             touch-action: pan-y; 
         }
 
@@ -155,12 +154,12 @@
         <p>Выберите уровень для старта:</p>
         <button id="level-1-button" onclick="startGame('world')">Уровень 1: Лес</button>
         <button id="level-2-button" onclick="startGame('cave')">Уровень 2: Пещера</button>
-        <button id="level-3-button" onclick="startGame('volcano')" disabled>Уровень 3: Вулкан (Сложность 3x)</button>
+        <button id="level-3-button" onclick="startGame('volcano')">Уровень 3: Вулкан (Сложность 3x)</button>
     </div>
     
     <div id="victory-screen">
         <h2>ПОБЕДА!</h2>
-        <p id="victory-message">2 УРОВЕНЬ РАЗРЕШЕН!</p>
+        <p id="victory-message">УРОВЕНЬ РАЗБЛОКИРОВАН!</p>
         <button onclick="goToMenu()">ПЕРЕЙТИ В МЕНЮ</button>
     </div>
 
@@ -217,6 +216,7 @@
         // === ПЕРЕМЕННЫЕ ИГРЫ ===
         let game = {
             state: 'menu', 
+            mapState: 'menu', // Сохраняет состояние карты, когда игрок в магазине
             score: 0,
             health: 100,
             coins: 0,
@@ -265,7 +265,8 @@
         let joystickDist = 0; 
         const JOYSTICK_RADIUS = 75; 
         let baseRect; 
-        let joystickTouchId = null; // ID касания, управляющего джойстиком. КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ!
+        let joystickTouchId = null; 
+        let enemySpawnInterval;
 
         // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
         
@@ -273,7 +274,6 @@
             return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
         }
         
-        // Управление полным экраном
         function toggleFullScreen() {
              const doc = document.documentElement;
              if (document.fullscreenElement) {
@@ -296,6 +296,7 @@
 
         function goToMenu() {
             game.state = 'menu';
+            game.mapState = 'menu';
             if (enemySpawnInterval) clearInterval(enemySpawnInterval);
             victoryScreen.style.display = 'none';
             menuScreen.style.display = 'flex';
@@ -306,11 +307,12 @@
             if (game.level2Unlocked) {
                  level2Button.disabled = false;
                  level2Button.textContent = 'Уровень 2: Пещера';
+                 level2Button.style.backgroundColor = '#00ff00';
             } else {
                  level2Button.disabled = true;
                  level2Button.textContent = 'Уровень 2: Пещера (заблокирован)';
+                 level2Button.style.backgroundColor = '#444';
             }
-            // ЛОГИКА 3 УРОВНЯ
             if (game.level3Unlocked) {
                  level3Button.disabled = false;
                  level3Button.textContent = 'Уровень 3: Вулкан (Сложность 3x)';
@@ -338,19 +340,27 @@
         function buyUpgrade(id) {
             const upgrade = UPGRADES.find(u => u.id === id);
             
-            if (game.upgrades[id] >= upgrade.max) {
+            // Определяем текущий уровень (на основе значения в game.upgrades)
+            const currentLevel = Math.round((game.upgrades[id] - 1) / upgrade.effect) + 1;
+            
+            if (currentLevel > upgrade.max) {
                  alert('Достигнут максимальный уровень улучшения!');
                  return;
             }
 
-            if (game.coins >= upgrade.cost) {
-                game.coins -= upgrade.cost;
+            // Рассчитываем динамическую стоимость
+            let cost = upgrade.cost;
+            for (let i = 1; i < currentLevel; i++) {
+                 cost = Math.round(cost * 1.5);
+            }
+
+            if (game.coins >= cost) {
+                game.coins -= cost;
                 game.upgrades[id] += upgrade.effect;
-                upgrade.cost = Math.round(upgrade.cost * 1.5);
                 coinsDisplay.textContent = game.coins;
                 updateShopList();
             } else {
-                alert('Недостаточно монет!');
+                alert('Недостаточно монет! Требуется: ' + cost);
             }
         }
 
@@ -358,14 +368,21 @@
             shopCoinsDisplay.textContent = game.coins;
             upgradeList.innerHTML = '';
             UPGRADES.forEach(u => {
-                const level = Math.round((game.upgrades[u.id] - 1) / u.effect) + 1;
-                const maxReached = game.upgrades[u.id] >= u.max;
+                const currentLevel = Math.round((game.upgrades[u.id] - 1) / u.effect) + 1;
+                const nextLevel = currentLevel + 1;
+                const maxReached = nextLevel > u.max;
+                
+                // Расчет стоимости следующего уровня
+                let cost = u.cost;
+                for (let i = 1; i < nextLevel; i++) {
+                    cost = Math.round(cost * 1.5);
+                }
 
                 const div = document.createElement('div');
                 div.className = 'upgrade-item';
                 div.innerHTML = `
-                    <span>${u.name} (Ур.${level})</span>
-                    <span>Цена: ${u.cost} монет</span>
+                    <span>${u.name} (Ур.${currentLevel}/${u.max})</span>
+                    <span>Цена: ${maxReached ? '---' : cost} монет</span>
                     <button ${maxReached ? 'disabled' : ''} onclick="buyUpgrade('${u.id}')">
                         ${maxReached ? 'МАКС' : 'КУПИТЬ'}
                     </button>
@@ -382,6 +399,7 @@
                 pencilButton.style.display = 'none';
                 cancelButton.style.display = 'none';
                 shopButton.style.display = 'none';
+                joystickBase.style.display = 'none';
             }
         }
         
@@ -390,6 +408,7 @@
              shopScreen.style.display = 'none';
              if (game.hasPencil) pencilButton.style.display = 'block';
              shopButton.style.display = 'block';
+             joystickBase.style.display = 'flex';
         }
 
         function spawnBoss() {
@@ -419,6 +438,17 @@
                 isLevel2: isLevel2,
                 isLevel3: isLevel3
             };
+        }
+        
+        function shootRocket(x, y, angle) {
+            rockets.push({
+                x, 
+                y, 
+                size: 20,
+                vx: 5 * Math.cos(angle),
+                vy: 5 * Math.sin(angle),
+                isReversed: false 
+            });
         }
 
 
@@ -479,19 +509,12 @@
             game.playerX += dx * moveFactor;
             game.playerY += dy * moveFactor;
             
-            // Блокировка выхода из пещеры (игровое поле не бесконечно)
+            // Блокировка выхода из пещеры/вулкана (если нужно)
             if (game.state === 'cave' || game.state === 'volcano') {
-                const mapBoundary = 1000; // Условный размер карты, чтобы игрок не улетал в пустоту
+                const mapBoundary = 1000; 
                 
-                // Ограничиваем игрока на большой, но конечной карте
                 game.playerX = Math.max(-mapBoundary, Math.min(game.playerX, mapBoundary));
                 game.playerY = Math.max(-mapBoundary, Math.min(game.playerY, mapBoundary));
-
-                // Специальное ограничение для пещеры/вулкана, чтобы не выходить за нижний край окна
-                 const minYBoundary = cameraY + H - PLAYER_SIZE/2 - 10;
-                 if (game.playerY > minYBoundary) {
-                     game.playerY = minYBoundary;
-                 }
             }
 
 
@@ -510,45 +533,52 @@
                  return;
             }
 
-            game.state = mapType;
-            game.mapState = mapType;
-            game.playerX = 0;
-            game.playerY = 0;
-            game.health = 100;
-            game.kills = 0;
-            
-            game.invulnerabilityTimer = Date.now() + 1000; 
+            try {
+                game.state = mapType;
+                game.mapState = mapType;
+                game.playerX = 0;
+                game.playerY = 0;
+                game.health = 100;
+                game.kills = 0;
+                
+                game.invulnerabilityTimer = Date.now() + 1000; 
 
-            enemies = []; 
-            objects = [];
-            bullets = [];
-            coins = [];
-            boss = null;
-            rockets = [];
-            
-            shopButton.style.display = 'block';
-            if (game.hasPencil) pencilButton.style.display = 'block';
+                enemies = []; 
+                objects = [];
+                bullets = [];
+                coins = [];
+                boss = null;
+                rockets = [];
+                
+                // ГАРАНТИРОВАННО СКРЫВАЕМ МЕНЮ
+                menuScreen.style.display = 'none'; 
+                
+                shopButton.style.display = 'block';
+                joystickBase.style.display = 'flex';
+                if (game.hasPencil) pencilButton.style.display = 'block';
+                if (game.isDrawingMode) exitDrawingMode(); // Выключаем режим рисования при старте
 
-            menuScreen.style.display = 'none';
+                if (enemySpawnInterval) clearInterval(enemySpawnInterval);
 
-            if (mapType === 'world') {
-                 initGameObjects(); 
-                 if (enemySpawnInterval) clearInterval(enemySpawnInterval);
-                 enemySpawnInterval = setInterval(() => {
-                    if (game.state === 'world') createEnemy();
-                 }, 1000); 
-            } else if (mapType === 'cave') {
-                 initCaveObjects();
-                 if (enemySpawnInterval) clearInterval(enemySpawnInterval);
-                 enemySpawnInterval = setInterval(() => {
-                    if (game.state === 'cave') createEnemy(undefined, undefined, undefined, 1.5); 
-                 }, 650); 
-            } else if (mapType === 'volcano') {
-                 initVolcanoObjects(); 
-                 if (enemySpawnInterval) clearInterval(enemySpawnInterval);
-                 enemySpawnInterval = setInterval(() => {
-                    if (game.state === 'volcano') createEnemy(undefined, undefined, undefined, 3.0); 
-                 }, 300); 
+                if (mapType === 'world') {
+                     initGameObjects(); 
+                     enemySpawnInterval = setInterval(() => {
+                        if (game.state === 'world') createEnemy();
+                     }, 1000); 
+                } else if (mapType === 'cave') {
+                     initCaveObjects();
+                     enemySpawnInterval = setInterval(() => {
+                        if (game.state === 'cave') createEnemy(undefined, undefined, undefined, 1.5); 
+                     }, 650); 
+                } else if (mapType === 'volcano') {
+                     initVolcanoObjects(); 
+                     enemySpawnInterval = setInterval(() => {
+                        if (game.state === 'volcano') createEnemy(undefined, undefined, undefined, 3.0); 
+                     }, 300); 
+                }
+            } catch (error) {
+                 alert("Произошла ошибка при запуске игры: " + error.message);
+                 game.state = 'menu';
             }
         }
         
@@ -556,8 +586,9 @@
             game.playerX = 0; 
             game.playerY = 0; 
             
+            // Изначальное появление пещерных врагов
             for(let i=0; i<30; i++) { 
-                createEnemy(Math.random() * W - W/2, Math.random() * H * 0.5 - H/2, 'spider');
+                createEnemy((Math.random() - 0.5) * 500, (Math.random() - 0.5) * 500, 'spider', 1.5);
             }
         }
         
@@ -565,12 +596,14 @@
              game.playerX = 0; 
              game.playerY = 0; 
              
+             // Бассейны лавы
              for(let i=0; i<10; i++) {
                 spawnObject((Math.random() - 0.5) * 1000, (Math.random() - 0.5) * 1000, 'lava_pool').size = 50; 
              }
              
+             // Изначальное появление вулканических врагов
              for(let i=0; i<50; i++) { 
-                createEnemy((Math.random() - 0.5) * W, (Math.random() - 0.5) * H, 'cockroach', 3.0);
+                createEnemy((Math.random() - 0.5) * 500, (Math.random() - 0.5) * 500, 'cockroach', 3.0);
              }
         }
 
@@ -580,6 +613,7 @@
                 pencilButton.style.display = 'none';
                 cancelButton.style.display = 'block';
                 CANVAS.classList.add('drawing-cursor');
+                joystickBase.style.display = 'none';
             }
         }
         
@@ -590,6 +624,7 @@
             }
             cancelButton.style.display = 'none';
             CANVAS.classList.remove('drawing-cursor');
+            joystickBase.style.display = 'flex';
         }
 
         // --- ОБРАБОТКА ВВОДА КЛАВИАТУРЫ ---
@@ -606,44 +641,31 @@
             keys[e.key] = false;
         });
 
-        // === 2. СНАРЯДЫ И ЛОГИКА МУЛЬТИТАЧА (КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ) ===
+        // === 2. СНАРЯДЫ И ЛОГИКА МУЛЬТИТАЧА ===
         
         CANVAS.addEventListener('touchstart', (e) => {
             if (game.state !== 'world' && game.state !== 'cave' && game.state !== 'volcano') return;
             
             const rect = CANVAS.getBoundingClientRect();
             
-            // Проходим по касаниям, которые только что начались
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
                 
-                // Игнорируем касание, если оно используется для джойстика
                 if (touch.identifier === joystickTouchId) {
                     continue; 
                 }
-
-                // Проверяем, находится ли касание в области джойстика
-                const clientX = touch.clientX;
-                const clientY = touch.clientY;
                 
+                // Проверяем, что касание не находится в области джойстика
                 const centerX = baseRect.left + JOYSTICK_RADIUS;
                 const centerY = baseRect.top + JOYSTICK_RADIUS;
-                // Даем немного больше запаса, чем сам джойстик (например, 100px)
-                const distFromBase = distance(clientX, clientY, centerX, centerY); 
+                const distFromBase = distance(touch.clientX, touch.clientY, centerX, centerY); 
                 
-                // Если касание вне зоны джойстика, это выстрел
                 if (distFromBase > 100) { 
                     
-                    const touchX = clientX - rect.left;
-                    const touchY = clientY - rect.top;
+                    const touchX = touch.clientX - rect.left;
+                    const touchY = touch.clientY - rect.top;
                     
-                    // Стрельба
-                    if (game.isDrawingMode) {
-                        // Карандаш работает по клику/тапу
-                        // Здесь можно было бы реализовать логику карандаша для тач,
-                        // но для простоты оставим ее на синтетическом клике или вынесем.
-                        // Пока что просто игнорируем, если режим карандаша включен
-                    } else {
+                    if (!game.isDrawingMode) {
                         const angle = Math.atan2(touchY - PLAYER_DRAW_Y, touchX - PLAYER_DRAW_X);
                         
                         bullets.push({
@@ -658,12 +680,24 @@
             }
         });
         
-        // ОСТАВЛЯЕМ CLICK (для ПК мыши и работы карандаша)
         CANVAS.addEventListener('click', (e) => {
             if (game.state !== 'world' && game.state !== 'cave' && game.state !== 'volcano') return;
             if (e.target.tagName === 'BUTTON') return; 
-
+            
+            // Если клик произошел в области джойстика, игнорируем его
             const rect = CANVAS.getBoundingClientRect();
+            const clickX = e.clientX;
+            const clickY = e.clientY;
+            
+            if (joystickBase.style.display !== 'none') {
+                const centerX = baseRect.left + JOYSTICK_RADIUS;
+                const centerY = baseRect.top + JOYSTICK_RADIUS;
+                if (distance(clickX, clickY, centerX, centerY) < JOYSTICK_RADIUS) {
+                    return; 
+                }
+            }
+
+
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
             
@@ -671,7 +705,6 @@
             const worldClickY = mouseY + cameraY;
 
             if (game.isDrawingMode) {
-                // ЛОГИКА КАРАНДАША
                 let targetTree = null;
                 const treeRadius = 60;
                 
@@ -683,11 +716,13 @@
                 }
                 
                 if (targetTree) {
+                    // "Покраска" дерева
                     targetTree.type = 'green_tree';
                     
                     game.wood += 2; 
                     spawnCoin(targetTree.x, targetTree.y); 
                     
+                    // Убийство пауков
                     const killRadius = 150;
                     for (let i = enemies.length - 1; i >= 0; i--) {
                         const e = enemies[i];
@@ -700,7 +735,6 @@
                     exitDrawingMode();
                 }
             } else {
-                 // В режиме ПК (мышь) мы также стреляем по клику
                  if (e.pointerType === 'mouse' || !e.pointerType) {
                     const angle = Math.atan2(mouseY - PLAYER_DRAW_Y, mouseX - PLAYER_DRAW_X);
                     
@@ -715,24 +749,20 @@
             }
         });
         
-        // ... (функции updateBullets, updateRockets, updateBoss и т.д. остаются без изменений)
-        
         function updateBullets() {
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // Столкновение пули с ракетой Босса
+                // Столкновение пули с ракетой
                 for (let j = rockets.length - 1; j >= 0; j--) {
                     const r = rockets[j];
                     if (distance(r.x, r.y, b.x, b.y) < r.size/2 + b.size/2) {
-                        
                         bullets.splice(i, 1); 
-                        r.vx *= -1;
+                        r.vx *= -1; // Разворот ракеты
                         r.vy *= -1;
                         r.isReversed = true; 
-                        
                         i--; 
                         break; 
                     }
@@ -750,9 +780,9 @@
                 r.x += r.vx;
                 r.y += r.vy;
 
-                // 1. Урон Игроку (если не развернута)
                 const isPlayerInvulnerable = Date.now() < game.invulnerabilityTimer;
 
+                // Столкновение с игроком (если ракета не развернута)
                 if (!r.isReversed && !isPlayerInvulnerable && distance(game.playerX, game.playerY, r.x, r.y) < PLAYER_SIZE/2 + r.size/2) {
                     game.health -= 50; 
                     if (game.health <= 0) endGame();
@@ -760,16 +790,14 @@
                     continue;
                 }
                 
-                // 2. Урон Боссу (если развернута)
+                // Столкновение с боссом (если ракета развернута)
                 if (r.isReversed && boss && distance(boss.x, boss.y, r.x, r.y) < boss.size/2 + r.size/2) {
                     boss.health -= 50; 
                     if (boss.health <= 0) {
-                        // ПОБЕДА НАД БОССОМ
                         const currentMap = game.mapState;
                         boss = null;
                         rockets = [];
                         
-                        // Логика разблокировки нового уровня
                         if (currentMap === 'world') {
                             game.level2Unlocked = true;
                             victoryMessage.textContent = 'УРОВЕНЬ 2 РАЗБЛОКИРОВАН!';
@@ -789,34 +817,37 @@
                     continue;
                 }
 
-                // 3. Удаление, если улетела слишком далеко
                  if (distance(game.playerX, game.playerY, r.x, r.y) > W + H + 500) {
                     rockets.splice(i, 1);
                 }
             }
         }
-
-        // ... (остальные вспомогательные функции, как в предыдущем ответе)
         
         function spawnCoin(x, y) {
-            coins.push({ x, y, size: 10, vy: -2, vx: (Math.random() - 0.5) * 1 }); 
+            coins.push({ x, y, size: 10, vy: -2, vx: (Math.random() - 0.5) * 1, isGravityApplied: true }); 
         }
 
         function checkCoinCollision() {
             for (let i = coins.length - 1; i >= 0; i--) {
                 const c = coins[i];
-                if (distance(game.playerX, game.playerY, c.x, c.y) < PLAYER_SIZE/2 + c.size/2 + 50) { 
+                const distToPlayer = distance(game.playerX, game.playerY, c.x, c.y);
+
+                if (distToPlayer < PLAYER_SIZE/2 + c.size/2 + 50) { 
+                    // Притяжение монет
                     c.vx = (game.playerX - c.x) * 0.1;
                     c.vy = (game.playerY - c.y) * 0.1;
+                    c.isGravityApplied = false;
                 }
                 
-                if (distance(game.playerX, game.playerY, c.x, c.y) < PLAYER_SIZE/2 + c.size/2 + 5) {
+                if (distToPlayer < PLAYER_SIZE/2 + c.size/2 + 5) {
                     game.coins++;
                     coins.splice(i, 1);
                 } else {
                     c.x += c.vx;
                     c.y += c.vy;
-                    c.vy += 0.1; 
+                    if (c.isGravityApplied) {
+                        c.vy += 0.1; 
+                    }
                 }
             }
             coinsDisplay.textContent = game.coins;
@@ -839,13 +870,15 @@
                     continue;
                 }
                 
-                if ((obj.type === 'lava_pool' || obj.type === 'web') && distance(game.playerX, game.playerY, obj.x, obj.y) < PLAYER_SIZE/2 + obj.size/2) {
-                    if (Date.now() % 60 === 0 && obj.type === 'lava_pool') { 
+                // Урон от лавы
+                if ((obj.type === 'lava_pool') && distance(game.playerX, game.playerY, obj.x, obj.y) < PLAYER_SIZE/2 + obj.size/2) {
+                    if (Date.now() % 60 === 0) { 
                         game.health -= 5;
                         if (game.health <= 0) endGame();
                     }
                 }
                 
+                // Длительность паутины
                 if (obj.type === 'web') {
                     obj.duration--;
                     if (obj.duration <= 0) {
@@ -854,11 +887,13 @@
                     }
                 }
                 
+                // Удаление объектов, которые слишком далеко (только для "мира")
                 if (game.mapState === 'world' && distance(game.playerX, game.playerY, obj.x, obj.y) > VIEW_RADIUS * 2) {
                     objects.splice(i, 1);
                 }
             }
             
+            // Появление новых деревьев в "мире"
             if (game.mapState === 'world') {
                 if (objects.filter(o => o.type === 'tree' || o.type === 'green_tree').length < 15) {
                     const angle = Math.random() * Math.PI * 2;
@@ -874,6 +909,7 @@
             
             for (let i = 0; i < multiplier; i++) {
                 if (x === undefined) {
+                    // Появление врагов за пределами экрана
                     const angle = Math.random() * Math.PI * 2;
                     const radius = W / 2 + 100; 
                     x = game.playerX + radius * Math.cos(angle);
@@ -887,31 +923,121 @@
                 enemies.push({ x, y, size: 20, type: enemyType, speed, damage, state: 'idle' });
             }
         }
+
+        function updateEnemies() {
+            const isPlayerInvulnerable = Date.now() < game.invulnerabilityTimer;
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                const distToPlayer = distance(game.playerX, game.playerY, e.x, e.y);
+                
+                // Логика состояний
+                if (boss) {
+                    e.state = 'flee'; 
+                } else if (distToPlayer < AGGRO_RADIUS) {
+                    e.state = 'aggressive'; 
+                } else {
+                    e.state = 'idle';
+                }
+
+                // Движение врага
+                if (e.state === 'aggressive') {
+                    const angle = Math.atan2(game.playerY - e.y, game.playerX - e.x);
+                    e.x += e.speed * Math.cos(angle);
+                    e.y += e.speed * Math.sin(angle);
+                } else if (e.state === 'flee') { 
+                    const angle = Math.atan2(game.playerY - e.y, game.playerX - e.x);
+                    e.x -= e.speed * Math.cos(angle); 
+                    e.y -= e.speed * Math.sin(angle); 
+                }
+
+                // Столкновение с игроком
+                if (distToPlayer < PLAYER_SIZE/2 + e.size/2) {
+                    if (!boss) { 
+                        if (!game.isShieldActive && !isPlayerInvulnerable) { 
+                            game.health -= e.damage;
+                            healthDisplay.textContent = Math.max(0, game.health);
+                        }
+                        
+                        // Создание паутины при атаке паука
+                        if (e.type === 'spider' && game.mapState === 'world' && Math.random() < 0.5) { 
+                            spawnObject(e.x, e.y, 'web').size = 25; 
+                        }
+
+                        enemies.splice(i, 1);
+                        if (game.health <= 0) { endGame(); return; }
+                        continue; 
+                    } 
+                }
+                
+                // Столкновение с пулей
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    const b = bullets[j];
+                    if (distance(e.x, e.y, b.x, b.y) < e.size/2) {
+                        game.score += 10;
+                        game.kills++; 
+                        spawnCoin(e.x, e.y); 
+                        enemies.splice(i, 1);
+                        bullets.splice(j, 1);
+                        break;
+                    }
+                }
+                
+                // Удаление врагов, которые слишком далеко (только для "мира")
+                if (game.mapState === 'world' && distToPlayer > VIEW_RADIUS * 2 + 500) {
+                    enemies.splice(i, 1);
+                }
+            }
+            
+            // Появление босса
+            if (!boss && game.kills >= BOSS_KILL_THRESHOLD && (game.state !== 'menu' && game.state !== 'shop')) {
+                 spawnBoss();
+            }
+        }
         
-        function shootRocket(x, y, angle) {
-            rockets.push({
-                x: x,
-                y: y,
-                size: 20,
-                vx: 5 * Math.cos(angle),
-                vy: 5 * Math.sin(angle),
-                isReversed: false 
-            });
+        function updateBoss() {
+            if (!boss) return;
+            const now = Date.now();
+            const distToPlayer = distance(game.playerX, game.playerY, boss.x, boss.y);
+
+            // Движение босса
+            const angle = Math.atan2(game.playerY - boss.y, game.playerX - boss.x);
+            boss.x += boss.speed * Math.cos(angle);
+            boss.y += boss.speed * Math.sin(angle);
+
+            // Атака босса
+            if (now >= boss.nextShotTime) {
+                if (distToPlayer < VIEW_RADIUS + 200) { 
+                    
+                    if (boss.isLevel3) { // Тройная ракета для 3 уровня
+                         shootRocket(boss.x, boss.y, angle);
+                         shootRocket(boss.x, boss.y, angle + 0.2);
+                         shootRocket(boss.x, boss.y, angle - 0.2);
+                    }
+                    else if (boss.isLevel2) { // Двойная ракета для 2 уровня
+                        shootRocket(boss.x + 10, boss.y, angle + 0.1);
+                        shootRocket(boss.x - 10, boss.y, angle - 0.1);
+                    } else { // Одиночная ракета для 1 уровня
+                        shootRocket(boss.x, boss.y, angle);
+                    }
+                }
+                boss.nextShotTime = now + (boss.isLevel3 ? 1000 : 2000); 
+            }
         }
 
+        // === 3. ФУНКЦИИ ОТРИСОВКИ ===
 
         function drawBoss() {
             if (!boss) return;
             const screenX = boss.x - cameraX;
             const screenY = boss.y - cameraY;
             
-            // Тело
             CTX.fillStyle = boss.isLevel3 ? '#ff0000' : (boss.isLevel2 ? '#8b008b' : 'darkred');
             CTX.beginPath();
             CTX.arc(screenX, screenY, boss.size, 0, Math.PI * 2);
             CTX.fill();
             
-            // Здоровье
+            // Полоса здоровья
             CTX.fillStyle = 'red';
             CTX.fillRect(screenX - boss.size, screenY - boss.size - 10, boss.size * 2, 5);
             CTX.fillStyle = 'lime';
@@ -930,17 +1056,30 @@
             }
         }
         
+        // ОБНОВЛЕННАЯ ФУНКЦИЯ ОРИСОВКИ ВРАГОВ (ПИКСЕЛЬНЫЕ ТЕКСТУРЫ)
         function drawEnemyShape(e, screenX, screenY) {
-            CTX.fillStyle = e.type === 'spider' ? '#666' : (e.type === 'cockroach' ? '#993300' : 'brown');
-            CTX.beginPath();
-            CTX.arc(screenX, screenY, e.size/2, 0, Math.PI * 2);
-            CTX.fill();
+            const halfSize = e.size / 2;
             
-            if (e.type === 'spider') {
-                 CTX.fillStyle = 'black';
-                 CTX.fillRect(screenX - 2, screenY - 2, 4, 4);
+            // Таракан: простой коричневый квадрат
+            if (e.type === 'cockroach') {
+                CTX.fillStyle = '#8B4513'; // Коричневый
+                CTX.fillRect(screenX - halfSize, screenY - halfSize, e.size, e.size);
+                
+            // Паук: темно-серый квадрат с белой точкой
+            } else if (e.type === 'spider') {
+                CTX.fillStyle = '#666'; // Темно-серый
+                CTX.fillRect(screenX - halfSize, screenY - halfSize, e.size, e.size);
+                
+                // Глаз/метка для паука
+                CTX.fillStyle = 'white';
+                CTX.fillRect(screenX - 2, screenY - 2, 4, 4);
+                
+            } else {
+                CTX.fillStyle = 'brown';
+                CTX.fillRect(screenX - halfSize, screenY - halfSize, e.size, e.size);
             }
         }
+
         
         function drawPlayerEyes(centerX, centerY, targetX, targetY) {
             const angle = Math.atan2(targetY - centerY, targetX - centerX);
@@ -1006,13 +1145,14 @@
                 }
             }
 
-
+            // Отрисовка объектов
             for(let obj of objects) {
                 const screenX = obj.x - cameraX;
                 const screenY = obj.y - cameraY;
                 drawObjectShape(obj, screenX, screenY);
             }
             
+            // Отрисовка монет
             CTX.fillStyle = 'gold';
             for(let c of coins) {
                 const screenX = c.x - cameraX;
@@ -1020,6 +1160,7 @@
                 CTX.fillRect(screenX - c.size/2, screenY - c.size/2, c.size, c.size);
             }
 
+            // Отрисовка пуль
             CTX.fillStyle = '#ffff00';
             for (let b of bullets) {
                 const screenX = b.x - cameraX;
@@ -1029,6 +1170,7 @@
             
             drawRockets();
 
+            // Отрисовка врагов
             for (let e of enemies) {
                 const screenX = e.x - cameraX;
                 const screenY = e.y - cameraY;
@@ -1043,21 +1185,20 @@
             CTX.fillStyle = isInvulnerable ? 'red' : '#00ffff'; 
             CTX.fillRect(PLAYER_DRAW_X - PLAYER_SIZE/2, PLAYER_DRAW_Y - PLAYER_SIZE/2, PLAYER_SIZE, PLAYER_SIZE);
             
+            // Отрисовка глаз
             let nearestTarget = enemies.reduce((min, e) => {
                 const dist = distance(game.playerX, game.playerY, e.x, e.y);
                 return (dist < min.dist) ? { dist, x: e.x, y: e.y } : min;
-            }, { dist: Infinity, x: PLAYER_DRAW_X, y: PLAYER_DRAW_Y - 100 });
+            }, { dist: Infinity, x: PLAYER_DRAW_X + cameraX, y: PLAYER_DRAW_Y + cameraY - 100 });
             
             if (boss && distance(game.playerX, game.playerY, boss.x, boss.y) < nearestTarget.dist) {
                  nearestTarget.x = boss.x;
                  nearestTarget.y = boss.y;
-            } else if (!boss && nearestTarget.dist === Infinity) {
-                 nearestTarget.x = PLAYER_DRAW_X;
-                 nearestTarget.y = PLAYER_DRAW_Y - 100;
             }
 
             drawPlayerEyes(PLAYER_DRAW_X, PLAYER_DRAW_Y, nearestTarget.x - cameraX, nearestTarget.y - cameraY);
 
+            // Отрисовка щита
             if (game.isShieldActive || isInvulnerable) { 
                 CTX.strokeStyle = isInvulnerable ? 'red' : '#00ffff';
                 CTX.lineWidth = 3;
@@ -1067,11 +1208,11 @@
             }
         }
 
-        // === ИНИЦИАЛИЗАЦИЯ И ЗАПУСК ===
 
         function initGameObjects() {
             objects = [];
             
+            // Изначальное появление деревьев и врагов в "мире"
             let initialTrees = [];
             for(let i=0; i<15; i++) {
                 const angle = Math.random() * Math.PI * 2;
@@ -1093,7 +1234,8 @@
                     createEnemy(treeObj.x + (Math.random() - 0.5) * 50, treeObj.y + (Math.random() - 0.5) * 50, 'spider');
                 }
                 
-                if (i === pencilTreeIndex) {
+                // Появление карандаша
+                if (i === pencilTreeIndex && !game.hasPencil) {
                     spawnObject(t.x + 30, t.y + 30, 'pencil');
                 }
             }
@@ -1125,16 +1267,19 @@
             
             joystickBase = document.getElementById('joystick-base');
             joystickKnob = document.getElementById('joystick-knob');
-            baseRect = joystickBase.getBoundingClientRect();
+            // Получаем размеры джойстика при инициализации
+            baseRect = joystickBase.getBoundingClientRect(); 
 
             setupJoystick();
             
+            // Скрытие элементов UI в меню
             document.getElementById('ui').style.display = 'flex'; 
             pencilButton.style.display = 'none';
             cancelButton.style.display = 'none';
             shopButton.style.display = 'none';
+            joystickBase.style.display = 'none';
             
-            // Загрузка статуса разблокировки
+            // Загрузка прогресса
             const savedUnlock2 = localStorage.getItem('level2Unlocked');
             if (savedUnlock2 === 'true') {
                  game.level2Unlocked = true;
@@ -1148,7 +1293,7 @@
             menuScreen.style.display = 'flex';
         }
 
-        // --- ЛОГИКА ДЖОЙСТИКА (ОБНОВЛЕНО ДЛЯ МУЛЬТИТАЧА) ---
+        // --- ЛОГИКА ДЖОЙСТИКА ---
         function handleMove(clientX, clientY) {
             const centerX = baseRect.left + JOYSTICK_RADIUS;
             const centerY = baseRect.top + JOYSTICK_RADIUS;
@@ -1189,11 +1334,9 @@
 
             // --- MOBILE TOUCH EVENTS ---
             
-            // Touch Start: Определяет, какой палец начал двигать джойстик
             joystickKnob.addEventListener('touchstart', (e) => {
                 if (joystickTouchId === null) {
                     isDragging = true;
-                    // Запоминаем ID первого касания
                     joystickTouchId = e.changedTouches[0].identifier; 
                     
                     e.preventDefault(); 
@@ -1201,10 +1344,8 @@
                 }
             }, { passive: false }); 
             
-            // Touch Move: Движение должно отслеживаться по всему документу и использовать только "наш" палец
             document.addEventListener('touchmove', (e) => {
                 if (isDragging) {
-                    // Ищем касание, ID которого совпадает с ID джойстика
                     let dragTouch = Array.from(e.changedTouches).find(t => t.identifier === joystickTouchId);
                     
                     if (dragTouch) {
@@ -1213,9 +1354,7 @@
                 }
             }, { passive: false }); 
 
-            // Touch End/Cancel: Сбрасываем ID, когда палец убран
             const handleTouchEnd = (e) => {
-                // Проверяем, закончено ли касание, которое управляло джойстиком
                 let endedTouch = Array.from(e.changedTouches).find(t => t.identifier === joystickTouchId);
                 if (endedTouch) {
                     joystickTouchId = null;
@@ -1226,6 +1365,7 @@
             document.addEventListener('touchend', handleTouchEnd);
             document.addEventListener('touchcancel', handleTouchEnd);
 
+            // Обновление размеров джойстика при изменении окна
             window.addEventListener('resize', () => {
                  baseRect = joystickBase.getBoundingClientRect();
             });
@@ -1235,23 +1375,33 @@
         let gameLoopId;
 
         function gameLoop() {
-            
-            if (game.state !== 'menu' && game.state !== 'shop' && game.state !== 'gameOver' && game.state !== 'victory') {
-                movePlayer();
-                updateBullets();
-                updateRockets(); 
-                updateEnemies();
-                updateBoss(); 
-                checkCoinCollision();
-                updateObjects();
+            // !!! КРИТИЧЕСКАЯ ЗАЩИТА !!!
+            try {
+                if (game.state !== 'menu' && game.state !== 'shop' && game.state !== 'gameOver' && game.state !== 'victory') {
+                    movePlayer();
+                    updateBullets();
+                    updateRockets(); 
+                    updateEnemies();
+                    updateBoss(); 
+                    checkCoinCollision();
+                    updateObjects();
+                }
+                
+                draw();
+                
+                // Обновление UI
+                scoreDisplay.textContent = game.score;
+                woodDisplay.textContent = game.wood; 
+                healthDisplay.textContent = Math.max(0, game.health);
+                killsDisplay.textContent = game.kills; 
+                
+            } catch (error) {
+                 // Если произошла ошибка во время цикла (обновление или отрисовка),
+                 // мы сообщаем об этом пользователю и перезагружаем игру.
+                 alert("Критическая ошибка: " + error.message + ". Пожалуйста, сообщите об этом. Игра будет перезагружена.");
+                 window.location.reload(); 
+                 return; 
             }
-            
-            draw();
-            
-            scoreDisplay.textContent = game.score;
-            woodDisplay.textContent = game.wood; 
-            healthDisplay.textContent = Math.max(0, game.health);
-            killsDisplay.textContent = game.kills; 
 
             gameLoopId = requestAnimationFrame(gameLoop);
         }
