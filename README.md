@@ -45,7 +45,7 @@
             left: 20px;
             z-index: 50;
         }
-        #pencil-button, #cancel-button, #shop-button {
+        #pencil-button, #cancel-button, #shop-button, #fullscreen-button { /* ДОБАВЛЕНО: Кнопка Полный Экран */
             padding: 10px;
             border: none;
             cursor: pointer;
@@ -58,6 +58,7 @@
         #pencil-button { background-color: #008000; color: white; display: none; }
         #cancel-button { background-color: #cc0000; color: white; display: none; }
         #shop-button { background-color: #00bfff; color: black; }
+        #fullscreen-button { background-color: #9900cc; color: white; } /* Стили для новой кнопки */
 
 
         /* Скрытые/Полноэкранные меню */
@@ -164,7 +165,7 @@
         <button id="shop-button" onclick="enterShop()">МАГАЗИН</button>
         <button id="pencil-button" onclick="enterDrawingMode()">КАРАНДАШ (Клик)</button>
         <button id="cancel-button" onclick="exitDrawingMode()">ОТМЕНА (X)</button>
-    </div>
+        <button id="fullscreen-button" onclick="toggleFullScreen()">ПОЛНЫЙ ЭКРАН</button> </div>
     
     <div id="ui">
         <span>Счёт: <span id="score-display">0</span></span>
@@ -222,7 +223,8 @@
             playerY: 0,
             hasPencil: false,
             isDrawingMode: false,
-            level2Unlocked: false, // НОВОЕ: Разблокирован ли Уровень 2
+            level2Unlocked: false, 
+            invulnerabilityTimer: 0, 
             upgrades: {
                 speed: 1, 
                 bulletSpeed: 1, 
@@ -263,6 +265,26 @@
         
         function distance(x1, y1, x2, y2) {
             return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        }
+        
+        // НОВАЯ ФУНКЦИЯ: Управление полным экраном
+        function toggleFullScreen() {
+             const doc = document.documentElement;
+             if (document.fullscreenElement) {
+                 document.exitFullscreen();
+             } else {
+                 doc.requestFullscreen().catch(err => {
+                     console.error(`Ошибка при попытке перехода в полноэкранный режим: ${err.message}`);
+                 });
+             }
+        }
+        
+        function saveGameProgress() {
+            try {
+                localStorage.setItem('level2Unlocked', game.level2Unlocked);
+            } catch (e) {
+                 console.error("Не удалось сохранить прогресс: ", e);
+            }
         }
 
         function goToMenu() {
@@ -357,7 +379,7 @@
             if (boss) return; 
 
             const isLevel2 = (game.mapState === 'cave');
-            const maxHP = isLevel2 ? 1000 : 500; // 1000 HP для 2 уровня
+            const maxHP = isLevel2 ? 1000 : 500; 
             
             const angle = Math.random() * Math.PI * 2;
             const radius = W / 2 + 300; 
@@ -373,7 +395,7 @@
                 damage: 50,
                 speed: 1.5,
                 nextShotTime: Date.now() + 2000,
-                isLevel2: isLevel2 // Флаг для двойного выстрела
+                isLevel2: isLevel2 
             };
         }
 
@@ -443,7 +465,7 @@
         }
 
         function startGame(mapType) {
-            // Если пытаемся начать 2 уровень, но он заблокирован
+            
             if (mapType === 'cave' && !game.level2Unlocked) {
                  alert("Уровень 2 заблокирован! Победите Босса на Уровне 1.");
                  return;
@@ -456,6 +478,9 @@
             game.health = 100;
             game.kills = 0;
             
+            // Установка таймера неуязвимости на 1 секунду
+            game.invulnerabilityTimer = Date.now() + 1000; 
+
             enemies = []; 
             objects = [];
             bullets = [];
@@ -477,28 +502,24 @@
             } else if (mapType === 'cave') {
                  initCaveObjects();
                  if (enemySpawnInterval) clearInterval(enemySpawnInterval);
-                 // Более частый спавн врагов на 2 уровне
                  enemySpawnInterval = setInterval(() => {
-                    if (game.state === 'cave') createEnemy(undefined, undefined, undefined, 1.5); // 1.5x врагов
+                    if (game.state === 'cave') createEnemy(undefined, undefined, undefined, 1.5); 
                  }, 650); 
             }
         }
         
         function initCaveObjects() {
-            // Инициализация объектов для 2 уровня (Пещера)
             game.playerX = W / 2;
             game.playerY = H - 50; 
             
-            // Враги спавнятся сразу, чтобы было ощущение опасности
-            for(let i=0; i<30; i++) { // Увеличено количество начальных врагов
-                createEnemy(Math.random() * W, Math.random() * H * 0.8, 'spider');
+            // Враги спавнятся только в верхней 50% экрана
+            for(let i=0; i<30; i++) { 
+                createEnemy(Math.random() * W, Math.random() * H * 0.5, 'spider');
             }
         }
 
 
         function teleportToCave(passageX, passageY) {
-            // Этот код больше не нужен, т.к. вход в пещеру теперь через меню
-            // Но мы оставим его на всякий случай, если игрок снова найдет проход
             if (!game.level2Unlocked) {
                  alert("Уровень 2 заблокирован! Победите Босса на Уровне 1.");
                  return;
@@ -556,7 +577,12 @@
 
         CANVAS.addEventListener('click', (e) => {
             if (game.state !== 'world' && game.state !== 'cave') return;
-            if (e.target.id === 'joystick-base' || e.target.id === 'joystick-knob') return;
+
+            // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Мы проверяем, что нажатие произошло не на элементы джойстика
+            if (e.target.id === 'joystick-base' || e.target.id === 'joystick-knob') return; 
+            
+            // Если игрок нажал на кнопку "Полный экран" или другую кнопку в UI, мы выходим
+            if (e.target.tagName === 'BUTTON') return; 
 
             const rect = CANVAS.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
@@ -645,7 +671,10 @@
                 r.y += r.vy;
 
                 // 1. Урон Игроку (если не развернута)
-                if (!r.isReversed && distance(game.playerX, game.playerY, r.x, r.y) < PLAYER_SIZE/2 + r.size/2) {
+                // Проверка неуязвимости игрока!
+                const isPlayerInvulnerable = Date.now() < game.invulnerabilityTimer;
+
+                if (!r.isReversed && !isPlayerInvulnerable && distance(game.playerX, game.playerY, r.x, r.y) < PLAYER_SIZE/2 + r.size/2) {
                     game.health -= 50; 
                     if (game.health <= 0) endGame();
                     rockets.splice(i, 1);
@@ -662,6 +691,7 @@
                         
                         if (game.mapState === 'world') {
                             game.level2Unlocked = true;
+                            saveGameProgress(); 
                             // Показываем экран победы
                             game.state = 'victory';
                             victoryScreen.style.display = 'flex';
@@ -761,7 +791,6 @@
         // === 4. ВРАГИ И БОСС ===
         
         function createEnemy(x, y, type, multiplier = 1) {
-            // Если multiplier > 1, то это для 2 уровня, где спавн чаще
             
             for (let i = 0; i < multiplier; i++) {
                 if (x === undefined) {
@@ -782,6 +811,8 @@
         let enemySpawnInterval; 
 
         function updateEnemies() {
+            const isPlayerInvulnerable = Date.now() < game.invulnerabilityTimer;
+
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
                 const distToPlayer = distance(game.playerX, game.playerY, e.x, e.y);
@@ -809,7 +840,8 @@
                 // 3. Столкновение с игроком (Только если нет босса!)
                 if (distToPlayer < PLAYER_SIZE/2 + e.size/2) {
                     if (!boss) { 
-                        if (!game.isShieldActive) {
+                        // Проверка неуязвимости
+                        if (!game.isShieldActive && !isPlayerInvulnerable) { 
                             game.health -= e.damage;
                             healthDisplay.textContent = Math.max(0, game.health);
                         }
@@ -1058,7 +1090,9 @@
             drawBoss();
 
             // Отрисовка игрока
-            CTX.fillStyle = '#00ffff';
+            const isInvulnerable = Date.now() < game.invulnerabilityTimer;
+
+            CTX.fillStyle = isInvulnerable ? 'red' : '#00ffff'; 
             CTX.fillRect(PLAYER_DRAW_X - PLAYER_SIZE/2, PLAYER_DRAW_Y - PLAYER_SIZE/2, PLAYER_SIZE, PLAYER_SIZE);
             
             let nearestTarget = enemies.reduce((min, e) => {
@@ -1076,8 +1110,8 @@
 
             drawPlayerEyes(PLAYER_DRAW_X, PLAYER_DRAW_Y, nearestTarget.x - cameraX, nearestTarget.y - cameraY);
 
-            if (game.isShieldActive) {
-                CTX.strokeStyle = '#00ffff';
+            if (game.isShieldActive || isInvulnerable) { 
+                CTX.strokeStyle = isInvulnerable ? 'red' : '#00ffff';
                 CTX.lineWidth = 3;
                 CTX.beginPath();
                 CTX.arc(PLAYER_DRAW_X, PLAYER_DRAW_Y, PLAYER_SIZE * 1.5, 0, Math.PI * 2);
@@ -1120,9 +1154,9 @@
         // --- ИНИЦИАЛИЗАЦИЯ DOM ЭЛЕМЕНТОВ ---
         function initDOM() {
             menuScreen = document.getElementById('menu-screen');
-            victoryScreen = document.getElementById('victory-screen'); // НОВЫЙ ЭКРАН ПОБЕДЫ
+            victoryScreen = document.getElementById('victory-screen'); 
             level1Button = document.getElementById('level-1-button');
-            level2Button = document.getElementById('level-2-button'); // КНОПКА УРОВНЯ 2
+            level2Button = document.getElementById('level-2-button'); 
 
             scoreDisplay = document.getElementById('score-display');
             coinsDisplay = document.getElementById('coins-display');
@@ -1151,7 +1185,12 @@
             cancelButton.style.display = 'none';
             shopButton.style.display = 'none';
             
-            // Изначально Уровень 2 заблокирован
+            // Загрузка статуса разблокировки
+            const savedUnlock = localStorage.getItem('level2Unlocked');
+            if (savedUnlock === 'true') {
+                 game.level2Unlocked = true;
+            }
+
             updateMenuButtons(); 
             menuScreen.style.display = 'flex';
         }
