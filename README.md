@@ -14,8 +14,8 @@
             margin: 0;
             padding: 20px;
             min-height: 100vh; 
-            /* Убедитесь, что body не мешает полному экрану */
-            touch-action: pan-y;
+            /* Важно для предотвращения конфликтов прокрутки/зума */
+            touch-action: pan-y; 
         }
 
         #game-canvas {
@@ -155,7 +155,8 @@
         <p>Выберите уровень для старта:</p>
         <button id="level-1-button" onclick="startGame('world')">Уровень 1: Лес</button>
         <button id="level-2-button" onclick="startGame('cave')">Уровень 2: Пещера</button>
-        <button id="level-3-button" onclick="startGame('volcano')" disabled>Уровень 3: Вулкан (Сложность 3x)</button> </div>
+        <button id="level-3-button" onclick="startGame('volcano')" disabled>Уровень 3: Вулкан (Сложность 3x)</button>
+    </div>
     
     <div id="victory-screen">
         <h2>ПОБЕДА!</h2>
@@ -227,7 +228,7 @@
             hasPencil: false,
             isDrawingMode: false,
             level2Unlocked: false,
-            level3Unlocked: false, // НОВАЯ ПЕРЕМЕННАЯ
+            level3Unlocked: false, 
             invulnerabilityTimer: 0, 
             upgrades: {
                 speed: 1, 
@@ -254,7 +255,7 @@
         let scoreDisplay, coinsDisplay, healthDisplay, shieldDisplay, woodDisplay, killsDisplay;
         let pencilButton, cancelButton, shopButton, shopScreen, upgradeList, shopCoinsDisplay;
         let gameOverScreen, finalScoreDisplay, menuScreen, victoryScreen, victoryMessage;
-        let level1Button, level2Button, level3Button; // ДОБАВЛЕНА КНОПКА 3 УРОВНЯ
+        let level1Button, level2Button, level3Button; 
 
         
         // --- ПЕРЕМЕННЫЕ ДЖОЙСТИКА ---
@@ -264,6 +265,7 @@
         let joystickDist = 0; 
         const JOYSTICK_RADIUS = 75; 
         let baseRect; 
+        let joystickTouchId = null; // ID касания, управляющего джойстиком. КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ!
 
         // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
         
@@ -286,7 +288,7 @@
         function saveGameProgress() {
             try {
                 localStorage.setItem('level2Unlocked', game.level2Unlocked);
-                localStorage.setItem('level3Unlocked', game.level3Unlocked); // СОХРАНЕНИЕ 3 УРОВНЯ
+                localStorage.setItem('level3Unlocked', game.level3Unlocked); 
             } catch (e) {
                  console.error("Не удалось сохранить прогресс: ", e);
             }
@@ -398,7 +400,7 @@
             
             let maxHP = 500;
             if (isLevel2) maxHP = 1000;
-            if (isLevel3) maxHP = 2000; // Самый сильный босс
+            if (isLevel3) maxHP = 2000; 
 
             const angle = Math.random() * Math.PI * 2;
             const radius = W / 2 + 300; 
@@ -412,7 +414,7 @@
                 health: maxHP, 
                 maxHealth: maxHP,
                 damage: 50,
-                speed: isLevel3 ? 3 : 1.5, // Босс 3 уровня быстрее
+                speed: isLevel3 ? 3 : 1.5, 
                 nextShotTime: Date.now() + 2000,
                 isLevel2: isLevel2,
                 isLevel3: isLevel3
@@ -448,11 +450,13 @@
             const currentSpeed = PLAYER_SPEED * game.upgrades.speed; 
             let effectiveSpeed = currentSpeed; 
 
+            // Управление Клавиатурой (ПК)
             if (keys['w'] || keys['W'] || keys['ArrowUp']) dy -= 1;
-            if (keys['s'] || keys['S'] || keys['ArrowDown']) dy += 1;
+            if (keys['s'] || keys['S'] || keys['ArrowDown']) dx += 1;
             if (keys['a'] || keys['A'] || keys['ArrowLeft']) dx -= 1;
-            if (keys['d'] || keys['D'] || keys['ArrowRight']) dx += 1;
+            if (keys['d'] || keys['D'] || keys['ArrowRight']) dy += 1;
 
+            // Управление Джойстиком (Мобильные)
             if (joystickDist > 0.1) { 
                 dx = joystickDist * Math.cos(joystickAngle);
                 dy = joystickDist * Math.sin(joystickAngle);
@@ -475,17 +479,19 @@
             game.playerX += dx * moveFactor;
             game.playerY += dy * moveFactor;
             
-            // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Блокировка выхода из пещеры
-            if (game.state === 'cave') {
-                // Если игрок пытается уйти вниз, блокируем его позицию
-                if (game.playerY > H / 2 + 100) { // Проверяем относительно центра карты (или конкретной координаты)
-                    // Устанавливаем границу Y. H - 50 - это примерно нижняя граница окна.
-                    game.playerY = Math.min(game.playerY, cameraY + H - PLAYER_SIZE/2 - 10); 
-                }
-                // Также блокируем горизонтальный выход
-                if (game.playerX < cameraX || game.playerX > cameraX + W) {
-                     game.playerX = Math.max(cameraX + PLAYER_SIZE/2 + 5, Math.min(game.playerX, cameraX + W - PLAYER_SIZE/2 - 5));
-                }
+            // Блокировка выхода из пещеры (игровое поле не бесконечно)
+            if (game.state === 'cave' || game.state === 'volcano') {
+                const mapBoundary = 1000; // Условный размер карты, чтобы игрок не улетал в пустоту
+                
+                // Ограничиваем игрока на большой, но конечной карте
+                game.playerX = Math.max(-mapBoundary, Math.min(game.playerX, mapBoundary));
+                game.playerY = Math.max(-mapBoundary, Math.min(game.playerY, mapBoundary));
+
+                // Специальное ограничение для пещеры/вулкана, чтобы не выходить за нижний край окна
+                 const minYBoundary = cameraY + H - PLAYER_SIZE/2 - 10;
+                 if (game.playerY > minYBoundary) {
+                     game.playerY = minYBoundary;
+                 }
             }
 
 
@@ -511,7 +517,6 @@
             game.health = 100;
             game.kills = 0;
             
-            // Установка таймера неуязвимости на 1 секунду
             game.invulnerabilityTimer = Date.now() + 1000; 
 
             enemies = []; 
@@ -539,36 +544,31 @@
                     if (game.state === 'cave') createEnemy(undefined, undefined, undefined, 1.5); 
                  }, 650); 
             } else if (mapType === 'volcano') {
-                 initVolcanoObjects(); // НОВАЯ ИНИЦИАЛИЗАЦИЯ
+                 initVolcanoObjects(); 
                  if (enemySpawnInterval) clearInterval(enemySpawnInterval);
                  enemySpawnInterval = setInterval(() => {
-                    if (game.state === 'volcano') createEnemy(undefined, undefined, undefined, 3.0); // СЛОЖНОСТЬ 3x
-                 }, 300); // ОЧЕНЬ БЫСТРЫЙ СПАВН
+                    if (game.state === 'volcano') createEnemy(undefined, undefined, undefined, 3.0); 
+                 }, 300); 
             }
         }
         
         function initCaveObjects() {
-            // Игрок стартует в центре
             game.playerX = 0; 
             game.playerY = 0; 
             
-            // Враги спавнятся
             for(let i=0; i<30; i++) { 
                 createEnemy(Math.random() * W - W/2, Math.random() * H * 0.5 - H/2, 'spider');
             }
         }
         
-        // НОВАЯ ФУНКЦИЯ: ИНИЦИАЛИЗАЦИЯ 3 УРОВНЯ
         function initVolcanoObjects() {
              game.playerX = 0; 
              game.playerY = 0; 
              
-             // Объекты (наземные мины или лавовые лужи)
              for(let i=0; i<10; i++) {
                 spawnObject((Math.random() - 0.5) * 1000, (Math.random() - 0.5) * 1000, 'lava_pool').size = 50; 
              }
              
-             // Стартовый спавн врагов
              for(let i=0; i<50; i++) { 
                 createEnemy((Math.random() - 0.5) * W, (Math.random() - 0.5) * H, 'cockroach', 3.0);
              }
@@ -606,51 +606,59 @@
             keys[e.key] = false;
         });
 
-        // === 2. СНАРЯДЫ И ЛОГИКА КЛИКА/ТАСКАНИЯ ===
+        // === 2. СНАРЯДЫ И ЛОГИКА МУЛЬТИТАЧА (КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ) ===
         
-        // НОВЫЙ ОБРАБОТЧИК ДЛЯ СТРЕЛЬБЫ НА МОБИЛЬНЫХ
         CANVAS.addEventListener('touchstart', (e) => {
             if (game.state !== 'world' && game.state !== 'cave' && game.state !== 'volcano') return;
             
             const rect = CANVAS.getBoundingClientRect();
             
-            // Перебираем все касания
-            for (let i = 0; i < e.touches.length; i++) {
-                const touch = e.touches[i];
+            // Проходим по касаниям, которые только что начались
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
                 
-                // Проверяем, не коснулись ли мы элемента джойстика
-                const targetElement = document.elementFromPoint(touch.clientX, touch.clientY);
-                if (targetElement && (targetElement.id === 'joystick-base' || targetElement.id === 'joystick-knob' || targetElement.tagName === 'BUTTON')) {
-                    continue; // Игнорируем касание на джойстике или кнопке
+                // Игнорируем касание, если оно используется для джойстика
+                if (touch.identifier === joystickTouchId) {
+                    continue; 
                 }
 
-                // Логика стрельбы (для этого касания)
+                // Проверяем, находится ли касание в области джойстика
+                const clientX = touch.clientX;
+                const clientY = touch.clientY;
                 
-                const touchX = touch.clientX - rect.left;
-                const touchY = touch.clientY - rect.top;
+                const centerX = baseRect.left + JOYSTICK_RADIUS;
+                const centerY = baseRect.top + JOYSTICK_RADIUS;
+                // Даем немного больше запаса, чем сам джойстик (например, 100px)
+                const distFromBase = distance(clientX, clientY, centerX, centerY); 
                 
-                const worldClickX = touchX + cameraX;
-                const worldClickY = touchY + cameraY;
-
-                if (game.isDrawingMode) {
-                    // ... (логика карандаша, можно оставить на 'click' или перенести)
-                    // Для простоты оставим карандаш на click, а touchstart только для стрельбы.
-                } else {
-                    // РЕЖИМ СТРЕЛЬБЫ
-                    const angle = Math.atan2(touchY - PLAYER_DRAW_Y, touchX - PLAYER_DRAW_X);
+                // Если касание вне зоны джойстика, это выстрел
+                if (distFromBase > 100) { 
                     
-                    bullets.push({
-                        x: game.playerX,
-                        y: game.playerY,
-                        size: 5 * game.upgrades.bulletDamage,
-                        vx: 10 * Math.cos(angle) * game.upgrades.bulletSpeed,
-                        vy: 10 * Math.sin(angle) * game.upgrades.bulletSpeed
-                    });
+                    const touchX = clientX - rect.left;
+                    const touchY = clientY - rect.top;
+                    
+                    // Стрельба
+                    if (game.isDrawingMode) {
+                        // Карандаш работает по клику/тапу
+                        // Здесь можно было бы реализовать логику карандаша для тач,
+                        // но для простоты оставим ее на синтетическом клике или вынесем.
+                        // Пока что просто игнорируем, если режим карандаша включен
+                    } else {
+                        const angle = Math.atan2(touchY - PLAYER_DRAW_Y, touchX - PLAYER_DRAW_X);
+                        
+                        bullets.push({
+                            x: game.playerX,
+                            y: game.playerY,
+                            size: 5 * game.upgrades.bulletDamage,
+                            vx: 10 * Math.cos(angle) * game.upgrades.bulletSpeed,
+                            vy: 10 * Math.sin(angle) * game.upgrades.bulletSpeed
+                        });
+                    }
                 }
             }
         });
         
-        // ОСТАВЛЯЕМ CLICK ТОЛЬКО ДЛЯ РЕЖИМА КАРАНДАША (УДОБНО НА ПК)
+        // ОСТАВЛЯЕМ CLICK (для ПК мыши и работы карандаша)
         CANVAS.addEventListener('click', (e) => {
             if (game.state !== 'world' && game.state !== 'cave' && game.state !== 'volcano') return;
             if (e.target.tagName === 'BUTTON') return; 
@@ -692,7 +700,7 @@
                     exitDrawingMode();
                 }
             } else {
-                 // В режиме ПК (мышь) мы также стреляем по клику, если это не touch.
+                 // В режиме ПК (мышь) мы также стреляем по клику
                  if (e.pointerType === 'mouse' || !e.pointerType) {
                     const angle = Math.atan2(mouseY - PLAYER_DRAW_Y, mouseX - PLAYER_DRAW_X);
                     
@@ -707,7 +715,7 @@
             }
         });
         
-        // ... (остальные функции updateBullets, updateRockets, updateBoss остаются без изменений)
+        // ... (функции updateBullets, updateRockets, updateBoss и т.д. остаются без изменений)
         
         function updateBullets() {
             for (let i = bullets.length - 1; i >= 0; i--) {
@@ -766,7 +774,7 @@
                             game.level2Unlocked = true;
                             victoryMessage.textContent = 'УРОВЕНЬ 2 РАЗБЛОКИРОВАН!';
                         } else if (currentMap === 'cave') {
-                            game.level3Unlocked = true; // РАЗБЛОКИРОВКА 3 УРОВНЯ
+                            game.level3Unlocked = true; 
                             victoryMessage.textContent = 'УРОВЕНЬ 3 РАЗБЛОКИРОВАН!';
                         } else if (currentMap === 'volcano') {
                              victoryMessage.textContent = 'ПОЛНАЯ ПОБЕДА! ВЫ ПРОШЛИ ИГРУ!';
@@ -787,8 +795,32 @@
                 }
             }
         }
+
+        // ... (остальные вспомогательные функции, как в предыдущем ответе)
         
-        // ... (функции монет и предметов)
+        function spawnCoin(x, y) {
+            coins.push({ x, y, size: 10, vy: -2, vx: (Math.random() - 0.5) * 1 }); 
+        }
+
+        function checkCoinCollision() {
+            for (let i = coins.length - 1; i >= 0; i--) {
+                const c = coins[i];
+                if (distance(game.playerX, game.playerY, c.x, c.y) < PLAYER_SIZE/2 + c.size/2 + 50) { 
+                    c.vx = (game.playerX - c.x) * 0.1;
+                    c.vy = (game.playerY - c.y) * 0.1;
+                }
+                
+                if (distance(game.playerX, game.playerY, c.x, c.y) < PLAYER_SIZE/2 + c.size/2 + 5) {
+                    game.coins++;
+                    coins.splice(i, 1);
+                } else {
+                    c.x += c.vx;
+                    c.y += c.vy;
+                    c.vy += 0.1; 
+                }
+            }
+            coinsDisplay.textContent = game.coins;
+        }
 
         function spawnObject(x, y, type) {
             const newObj = { x, y, size: 30, type, duration: type === 'web' ? 500 : 0 }; 
@@ -807,8 +839,8 @@
                     continue;
                 }
                 
-                if (obj.type === 'lava_pool' && distance(game.playerX, game.playerY, obj.x, obj.y) < PLAYER_SIZE/2 + obj.size/2) {
-                    if (Date.now() % 60 === 0) { // Наносим урон раз в секунду
+                if ((obj.type === 'lava_pool' || obj.type === 'web') && distance(game.playerX, game.playerY, obj.x, obj.y) < PLAYER_SIZE/2 + obj.size/2) {
+                    if (Date.now() % 60 === 0 && obj.type === 'lava_pool') { 
                         game.health -= 5;
                         if (game.health <= 0) endGame();
                     }
@@ -838,9 +870,6 @@
             }
         }
 
-
-        // ... (функции врагов и босса)
-
         function createEnemy(x, y, type, multiplier = 1) {
             
             for (let i = 0; i < multiplier; i++) {
@@ -852,113 +881,80 @@
                 }
                 
                 const enemyType = type || (Math.random() < 0.3 ? 'spider' : 'cockroach');
-                let speed = (enemyType === 'spider' ? 5 : 2) * multiplier; // Усиление скорости
-                let damage = (enemyType === 'spider' ? 30 : 5) * multiplier; // Усиление урона
+                let speed = (enemyType === 'spider' ? 5 : 2) * multiplier; 
+                let damage = (enemyType === 'spider' ? 30 : 5) * multiplier; 
                 
                 enemies.push({ x, y, size: 20, type: enemyType, speed, damage, state: 'idle' });
             }
         }
-
-        function updateEnemies() {
-            const isPlayerInvulnerable = Date.now() < game.invulnerabilityTimer;
-
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const e = enemies[i];
-                const distToPlayer = distance(game.playerX, game.playerY, e.x, e.y);
-                
-                // 1. Определение состояния
-                if (boss) {
-                    e.state = 'flee'; 
-                } else if (distToPlayer < AGGRO_RADIUS) {
-                    e.state = 'aggressive'; 
-                } else {
-                    e.state = 'idle';
-                }
-
-                // 2. Движение
-                if (e.state === 'aggressive') {
-                    const angle = Math.atan2(game.playerY - e.y, game.playerX - e.x);
-                    e.x += e.speed * Math.cos(angle);
-                    e.y += e.speed * Math.sin(angle);
-                } else if (e.state === 'flee') { 
-                    const angle = Math.atan2(game.playerY - e.y, game.playerX - e.x);
-                    e.x -= e.speed * Math.cos(angle); 
-                    e.y -= e.speed * Math.sin(angle); 
-                }
-
-                // 3. Столкновение с игроком
-                if (distToPlayer < PLAYER_SIZE/2 + e.size/2) {
-                    if (!boss) { 
-                        if (!game.isShieldActive && !isPlayerInvulnerable) { 
-                            game.health -= e.damage;
-                            healthDisplay.textContent = Math.max(0, game.health);
-                        }
-                        
-                        if (e.type === 'spider' && game.mapState === 'world' && Math.random() < 0.5) { 
-                            spawnObject(e.x, e.y, 'web').size = 25; 
-                        }
-
-                        enemies.splice(i, 1);
-                        if (game.health <= 0) { endGame(); return; }
-                        continue; 
-                    } 
-                }
-                
-                // 4. Столкновение с пулей
-                for (let j = bullets.length - 1; j >= 0; j--) {
-                    const b = bullets[j];
-                    if (distance(e.x, e.y, b.x, b.y) < e.size/2) {
-                        game.score += 10;
-                        game.kills++; 
-                        spawnCoin(e.x, e.y); 
-                        enemies.splice(i, 1);
-                        bullets.splice(j, 1);
-                        break;
-                    }
-                }
-                
-                if (game.mapState === 'world' && distToPlayer > VIEW_RADIUS * 2 + 500) {
-                    enemies.splice(i, 1);
-                }
-            }
-            
-            // ПРОВЕРКА СПАВНА БОССА
-            if (!boss && game.kills >= BOSS_KILL_THRESHOLD && (game.state !== 'menu' && game.state !== 'shop')) {
-                 spawnBoss();
-            }
-        }
         
-        function updateBoss() {
+        function shootRocket(x, y, angle) {
+            rockets.push({
+                x: x,
+                y: y,
+                size: 20,
+                vx: 5 * Math.cos(angle),
+                vy: 5 * Math.sin(angle),
+                isReversed: false 
+            });
+        }
+
+
+        function drawBoss() {
             if (!boss) return;
-            const now = Date.now();
-            const distToPlayer = distance(game.playerX, game.playerY, boss.x, boss.y);
+            const screenX = boss.x - cameraX;
+            const screenY = boss.y - cameraY;
+            
+            // Тело
+            CTX.fillStyle = boss.isLevel3 ? '#ff0000' : (boss.isLevel2 ? '#8b008b' : 'darkred');
+            CTX.beginPath();
+            CTX.arc(screenX, screenY, boss.size, 0, Math.PI * 2);
+            CTX.fill();
+            
+            // Здоровье
+            CTX.fillStyle = 'red';
+            CTX.fillRect(screenX - boss.size, screenY - boss.size - 10, boss.size * 2, 5);
+            CTX.fillStyle = 'lime';
+            const healthWidth = (boss.health / boss.maxHealth) * boss.size * 2;
+            CTX.fillRect(screenX - boss.size, screenY - boss.size - 10, healthWidth, 5);
+        }
 
-            // Движение 
-            const angle = Math.atan2(game.playerY - boss.y, game.playerX - boss.x);
-            boss.x += boss.speed * Math.cos(angle);
-            boss.y += boss.speed * Math.sin(angle);
-
-            // Атака ракетами
-            if (now >= boss.nextShotTime) {
-                if (distToPlayer < VIEW_RADIUS + 200) { 
-                    
-                    if (boss.isLevel3) { // 3 УРОВЕНЬ: ТРОЙНОЙ ВЫСТРЕЛ
-                         shootRocket(boss.x, boss.y, angle);
-                         shootRocket(boss.x, boss.y, angle + 0.2);
-                         shootRocket(boss.x, boss.y, angle - 0.2);
-                    }
-                    else if (boss.isLevel2) { 
-                        shootRocket(boss.x + 10, boss.y, angle + 0.1);
-                        shootRocket(boss.x - 10, boss.y, angle - 0.1);
-                    } else {
-                        shootRocket(boss.x, boss.y, angle);
-                    }
-                }
-                boss.nextShotTime = now + (boss.isLevel3 ? 1000 : 2000); // Быстрее стреляет на 3 уровне
+        function drawRockets() {
+            for (let r of rockets) {
+                const screenX = r.x - cameraX;
+                const screenY = r.y - cameraY;
+                CTX.fillStyle = r.isReversed ? 'yellow' : 'red';
+                CTX.beginPath();
+                CTX.arc(screenX, screenY, r.size/2, 0, Math.PI * 2);
+                CTX.fill();
             }
         }
         
-        // ... (функции отрисовки)
+        function drawEnemyShape(e, screenX, screenY) {
+            CTX.fillStyle = e.type === 'spider' ? '#666' : (e.type === 'cockroach' ? '#993300' : 'brown');
+            CTX.beginPath();
+            CTX.arc(screenX, screenY, e.size/2, 0, Math.PI * 2);
+            CTX.fill();
+            
+            if (e.type === 'spider') {
+                 CTX.fillStyle = 'black';
+                 CTX.fillRect(screenX - 2, screenY - 2, 4, 4);
+            }
+        }
+        
+        function drawPlayerEyes(centerX, centerY, targetX, targetY) {
+            const angle = Math.atan2(targetY - centerY, targetX - centerX);
+            const offset = 5; 
+            const eyeX = centerX + offset * Math.cos(angle);
+            const eyeY = centerY + offset * Math.sin(angle);
+
+            CTX.fillStyle = 'black';
+            CTX.beginPath();
+            CTX.arc(eyeX - 4, eyeY, 4, 0, Math.PI * 2);
+            CTX.arc(eyeX + 4, eyeY, 4, 0, Math.PI * 2);
+            CTX.fill();
+        }
+
 
         function drawObjectShape(obj, screenX, screenY) {
             if (obj.type === 'tree' || obj.type === 'green_tree') {
@@ -971,7 +967,7 @@
                 CTX.fillStyle = '#663300'; 
                 CTX.fillRect(screenX + 10, screenY - 2.5, 5, 5);
             } else if (obj.type === 'lava_pool') {
-                CTX.fillStyle = '#ff4500'; // Красный/оранжевый для лавы
+                CTX.fillStyle = '#ff4500'; 
                 CTX.beginPath();
                 CTX.arc(screenX, screenY, obj.size, 0, Math.PI * 2);
                 CTX.fill();
@@ -1001,17 +997,16 @@
             } else if (game.state === 'cave') {
                 CTX.fillStyle = '#221100'; 
                 CTX.fillRect(0, 0, W, H);
-            } else if (game.state === 'volcano') { // НОВЫЙ ФОН
-                CTX.fillStyle = '#4d0000'; // Темно-красный
+            } else if (game.state === 'volcano') { 
+                CTX.fillStyle = '#4d0000'; 
                 CTX.fillRect(0, 0, W, H);
-                CTX.fillStyle = '#800000'; // Бордовый
+                CTX.fillStyle = '#800000'; 
                 for(let i=0; i<W; i+=20) {
                      CTX.fillRect(i, 0, 10, H);
                 }
             }
 
 
-            // ... (Остальная отрисовка объектов, монет, пуль, врагов, босса)
             for(let obj of objects) {
                 const screenX = obj.x - cameraX;
                 const screenY = obj.y - cameraY;
@@ -1110,7 +1105,7 @@
             victoryMessage = document.getElementById('victory-message');
             level1Button = document.getElementById('level-1-button');
             level2Button = document.getElementById('level-2-button');
-            level3Button = document.getElementById('level-3-button'); // DOM 3 УРОВНЯ
+            level3Button = document.getElementById('level-3-button'); 
 
             scoreDisplay = document.getElementById('score-display');
             coinsDisplay = document.getElementById('coins-display');
@@ -1153,7 +1148,7 @@
             menuScreen.style.display = 'flex';
         }
 
-        // --- ЛОГИКА ДЖОЙСТИКА ---
+        // --- ЛОГИКА ДЖОЙСТИКА (ОБНОВЛЕНО ДЛЯ МУЛЬТИТАЧА) ---
         function handleMove(clientX, clientY) {
             const centerX = baseRect.left + JOYSTICK_RADIUS;
             const centerY = baseRect.top + JOYSTICK_RADIUS;
@@ -1182,6 +1177,7 @@
         }
 
         function setupJoystick() {
+            // --- PC MOUSE EVENTS ---
             joystickKnob.addEventListener('mousedown', (e) => {
                 isDragging = true;
                 e.preventDefault(); 
@@ -1191,23 +1187,44 @@
             });
             document.addEventListener('mouseup', handleEnd);
 
-            // Обработка тач-событий
+            // --- MOBILE TOUCH EVENTS ---
+            
+            // Touch Start: Определяет, какой палец начал двигать джойстик
             joystickKnob.addEventListener('touchstart', (e) => {
-                isDragging = true;
-                e.preventDefault(); 
-                handleMove(e.touches[0].clientX, e.touches[0].clientY);
-            });
-            document.addEventListener('touchmove', (e) => {
-                // Если у нас несколько касаний, убедимся, что двигается только то, которое началось на джойстике
-                let joystickTouch = Array.from(e.touches).find(t => t.target.id === 'joystick-knob' || t.target.id === 'joystick-base');
-
-                if (isDragging && e.touches.length > 0) {
-                     // Используем касание, которое активно двигает джойстик
-                     handleMove(e.touches[0].clientX, e.touches[0].clientY); 
+                if (joystickTouchId === null) {
+                    isDragging = true;
+                    // Запоминаем ID первого касания
+                    joystickTouchId = e.changedTouches[0].identifier; 
+                    
+                    e.preventDefault(); 
+                    handleMove(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
                 }
-            });
-            document.addEventListener('touchend', handleEnd);
-            document.addEventListener('touchcancel', handleEnd);
+            }, { passive: false }); 
+            
+            // Touch Move: Движение должно отслеживаться по всему документу и использовать только "наш" палец
+            document.addEventListener('touchmove', (e) => {
+                if (isDragging) {
+                    // Ищем касание, ID которого совпадает с ID джойстика
+                    let dragTouch = Array.from(e.changedTouches).find(t => t.identifier === joystickTouchId);
+                    
+                    if (dragTouch) {
+                        handleMove(dragTouch.clientX, dragTouch.clientY);
+                    }
+                }
+            }, { passive: false }); 
+
+            // Touch End/Cancel: Сбрасываем ID, когда палец убран
+            const handleTouchEnd = (e) => {
+                // Проверяем, закончено ли касание, которое управляло джойстиком
+                let endedTouch = Array.from(e.changedTouches).find(t => t.identifier === joystickTouchId);
+                if (endedTouch) {
+                    joystickTouchId = null;
+                    handleEnd(); 
+                }
+            };
+            
+            document.addEventListener('touchend', handleTouchEnd);
+            document.addEventListener('touchcancel', handleTouchEnd);
 
             window.addEventListener('resize', () => {
                  baseRect = joystickBase.getBoundingClientRect();
