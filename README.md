@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Pixel Hunter: Expansion Pack</title>
+    <title>Pixel Hunter: Scrollable Biomes</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -94,12 +94,16 @@
             border-radius: 5px;
         }
         
+        /* === СТИЛИ ПРОКРУТКИ МЕНЮ УРОВНЕЙ === */
         #menu-list {
             display: grid;
             grid-template-columns: repeat(4, 1fr); 
             gap: 10px;
             max-width: 900px; 
             margin: 20px auto;
+            max-height: 60vh; /* Ограничиваем высоту для прокрутки */
+            overflow-y: auto; /* Включаем вертикальную прокрутку */
+            padding-right: 15px; /* Для отступа от скроллбара */
         }
         
         .level-button {
@@ -110,12 +114,14 @@
              border: none;
              cursor: pointer;
              border-radius: 5px;
+             transition: background-color 0.3s;
         }
         .level-button[disabled] {
              background-color: #444;
              color: #999;
              cursor: not-allowed;
         }
+        /* ==================================== */
 
         .upgrade-item {
             display: flex;
@@ -167,7 +173,7 @@
 <body>
 
     <div id="menu-screen">
-        <h1>PIXEL HUNTER: EXPANSION PACK</h1>
+        <h1>PIXEL HUNTER: ВЫБОР БИОМА</h1>
         <p>Выберите биом для старта:</p>
         <div id="menu-list">
             </div>
@@ -226,28 +232,28 @@
         const VIEW_RADIUS = 500;
         const BOSS_KILL_THRESHOLD = 50; 
         
-        // --- СПИСОК ВСЕХ 20 БИОМОВ ---
+        // --- СПИСОК ВСЕХ 20 БИОМОВ (УРОВНЕЙ) ---
         const BIOMES = [
-            { id: 'world', name: '1. Лес (Пауки, Тараканы)', multiplier: 1.0, enemies: ['spider', 'cockroach'] },
-            { id: 'cave', name: '2. Пещера (Усиленные Враги)', multiplier: 1.5, enemies: ['spider', 'cockroach'] },
-            { id: 'volcano', name: '3. Вулкан (Лавовые Тараканы)', multiplier: 3.0, enemies: ['lava_roach'] },
-            { id: 'swamp', name: '4. Болото (Ядовитые Муравьи)', multiplier: 2.0, enemies: ['poison_ant', 'cockroach'] },
-            { id: 'winter', name: '5. Зима (Ледяные Пауки)', multiplier: 2.5, enemies: ['ice_spider', 'spider'] },
-            { id: 'desert', name: '6. Пустыня (Быстрые Мухи)', multiplier: 3.5, enemies: ['fast_fly', 'cockroach'] },
-            { id: 'forest_dark', name: '7. Темный Лес (Двойной Урон)', multiplier: 4.0, enemies: ['spider', 'cockroach'] },
-            { id: 'canyon', name: '8. Каньон (Высокая Скорость)', multiplier: 4.5, enemies: ['fast_fly', 'poison_ant'] },
-            { id: 'river', name: '9. Река (Мокрые Враги)', multiplier: 5.0, enemies: ['spider', 'cockroach'] },
-            { id: 'mountain', name: '10. Горы (Лава + Лед)', multiplier: 6.0, enemies: ['lava_roach', 'ice_spider'] },
-            { id: 'deep_cave', name: '11. Глубокая пещера (Пещера 2.0)', multiplier: 7.0, enemies: ['spider', 'cockroach'] },
-            { id: 'ruins', name: '12. Руины (Мухи + Паутина)', multiplier: 8.0, enemies: ['fast_fly', 'spider'] },
-            { id: 'city', name: '13. Город (Робо-Тараканы)', multiplier: 9.0, enemies: ['cockroach'] },
-            { id: 'jungle', name: '14. Джунгли (Яд + Скорость)', multiplier: 10.0, enemies: ['poison_ant', 'fast_fly'] },
-            { id: 'crystal', name: '15. Кристалл (Прочные Враги)', multiplier: 11.0, enemies: ['spider', 'lava_roach'] },
-            { id: 'space', name: '16. Космос (Все Враги)', multiplier: 12.0, enemies: ['spider', 'cockroach', 'ice_spider', 'poison_ant'] },
-            { id: 'ocean', name: '17. Океан (Лед + Яд)', multiplier: 13.0, enemies: ['ice_spider', 'poison_ant'] },
-            { id: 'moon', name: '18. Луна (Медленные и Толстые)', multiplier: 14.0, enemies: ['cockroach', 'lava_roach'] },
-            { id: 'hell', name: '19. Ад (Лава 2.0)', multiplier: 15.0, enemies: ['lava_roach', 'fast_fly'] },
-            { id: 'paradise', name: '20. Рай (Финальное испытание)', multiplier: 20.0, enemies: ['spider', 'cockroach', 'ice_spider', 'poison_ant', 'lava_roach', 'fast_fly'] }
+            { id: 'world', name: '1. Лес (Пауки, Тараканы)', multiplier: 1.0, enemies: ['spider', 'cockroach'], color: '#008000' },
+            { id: 'cave', name: '2. Пещера (Усиленные Враги)', multiplier: 1.5, enemies: ['spider', 'cockroach'], color: '#8B4513' },
+            { id: 'volcano', name: '3. Вулкан (Лавовые Тараканы 🔥)', multiplier: 3.0, enemies: ['lava_roach'], color: '#CC6600' },
+            { id: 'swamp', name: '4. Болото (Ядовитые Муравьи 🦠)', multiplier: 2.0, enemies: ['poison_ant', 'cockroach'], color: '#44AA44' },
+            { id: 'winter', name: '5. Зима (Ледяные Пауки 🥶)', multiplier: 2.5, enemies: ['ice_spider', 'spider'], color: '#00BFFF' },
+            { id: 'desert', name: '6. Пустыня (Быстрые Мухи 💨)', multiplier: 3.5, enemies: ['fast_fly', 'cockroach'], color: '#F0E68C' },
+            { id: 'forest_dark', name: '7. Темный Лес (Двойной Урон)', multiplier: 4.0, enemies: ['spider', 'cockroach'], color: '#333333' },
+            { id: 'canyon', name: '8. Каньон (Высокая Скорость)', multiplier: 4.5, enemies: ['fast_fly', 'poison_ant'], color: '#A0522D' },
+            { id: 'river', name: '9. Река (Мокрые Враги)', multiplier: 5.0, enemies: ['spider', 'cockroach'], color: '#4682B4' },
+            { id: 'mountain', name: '10. Горы (Лава + Лед)', multiplier: 6.0, enemies: ['lava_roach', 'ice_spider'], color: '#999999' },
+            { id: 'deep_cave', name: '11. Глубокая пещера (Пещера 2.0)', multiplier: 7.0, enemies: ['spider', 'cockroach'], color: '#110000' },
+            { id: 'ruins', name: '12. Руины (Мухи + Паутина)', multiplier: 8.0, enemies: ['fast_fly', 'spider'], color: '#696969' },
+            { id: 'city', name: '13. Город (Робо-Тараканы)', multiplier: 9.0, enemies: ['cockroach'], color: '#6A5ACD' },
+            { id: 'jungle', name: '14. Джунгли (Яд + Скорость)', multiplier: 10.0, enemies: ['poison_ant', 'fast_fly'], color: '#006400' },
+            { id: 'crystal', name: '15. Кристалл (Прочные Враги)', multiplier: 11.0, enemies: ['spider', 'lava_roach'], color: '#FF00FF' },
+            { id: 'space', name: '16. Космос (Все Враги)', multiplier: 12.0, enemies: ['spider', 'cockroach', 'ice_spider', 'poison_ant'], color: '#000080' },
+            { id: 'ocean', name: '17. Океан (Лед + Яд)', multiplier: 13.0, enemies: ['ice_spider', 'poison_ant'], color: '#1E90FF' },
+            { id: 'moon', name: '18. Луна (Медленные и Толстые)', multiplier: 14.0, enemies: ['cockroach', 'lava_roach'], color: '#C0C0C0' },
+            { id: 'hell', name: '19. Ад (Лава 2.0)', multiplier: 15.0, enemies: ['lava_roach', 'fast_fly'], color: '#800000' },
+            { id: 'paradise', name: '20. Рай (Финальное испытание 🏆)', multiplier: 20.0, enemies: ['spider', 'cockroach', 'ice_spider', 'poison_ant', 'lava_roach', 'fast_fly'], color: '#FFD700' }
         ];
 
         
@@ -275,7 +281,7 @@
             invulnerabilityTimer: 0, 
             burnNextTick: 0,
             poisonNextTick: 0, 
-            slowedTimer: 0 // Таймер замедления
+            slowedTimer: 0 
         };
         
         const PLAYER_DRAW_X = W / 2;
@@ -354,15 +360,12 @@
                 button.className = 'level-button';
                 button.textContent = biome.name;
                 button.onclick = () => startGame(biome.id);
+                button.style.backgroundColor = biome.color; 
                 
                 if (levelNum > game.unlockedLevels) {
                     button.disabled = true;
                     button.textContent += ' (Забл.)';
                     button.style.backgroundColor = '#444';
-                } else if (levelNum === BIOMES.length) {
-                    button.style.backgroundColor = '#cc00cc'; // Финальный уровень
-                } else if (biome.multiplier >= 4.0) {
-                    button.style.backgroundColor = '#cc6600'; // Сложные уровни
                 }
                 
                 menuList.appendChild(button);
@@ -842,7 +845,6 @@
                 if (r.isReversed && boss && distance(boss.x, boss.y, r.x, r.y) < boss.size/2 + r.size/2) {
                     boss.health -= 50; 
                     if (boss.health <= 0) {
-                        const biomeData = BIOMES.find(b => b.id === game.mapState);
                         const nextLevelIndex = BIOMES.findIndex(b => b.id === game.mapState) + 1;
                         
                         boss = null;
@@ -943,7 +945,7 @@
 
         function createEnemy(x, y, type, multiplier = 1) {
             
-            for (let i = 0; i < 1; i++) { // Создаем 1 врага, множитель влияет на характеристики
+            for (let i = 0; i < 1; i++) { 
                 if (x === undefined) {
                     const angle = Math.random() * Math.PI * 2;
                     const radius = W / 2 + 100; 
@@ -951,14 +953,34 @@
                     y = game.playerY + radius * Math.sin(angle);
                 }
                 
-                const baseSpeed = (type === 'spider' || type === 'ice_spider') ? 5 : ((type === 'lava_roach') ? 0.5 : 2);
-                const baseDamage = (type === 'spider') ? 30 : ((type === 'lava_roach') ? 6 : ((type === 'poison_ant') ? 10 : 5));
-                const speedMultiplier = (type === 'fast_fly') ? 3 : 1; // Мухи всегда быстрые
+                // Скорость: Тараканы медленные, Мухи быстрые, Пауки средние
+                let baseSpeed = 0;
+                let baseDamage = 0;
+                let size = 20;
+
+                switch (type) {
+                    case 'cockroach':
+                        baseSpeed = 2; baseDamage = 10; break;
+                    case 'spider':
+                        baseSpeed = 5; baseDamage = 30; break;
+                    case 'lava_roach': // Наносит 6 урона + горение
+                        baseSpeed = 0.5; baseDamage = 6; size = 25; break; 
+                    case 'ice_spider':
+                        baseSpeed = 4; baseDamage = 25; break;
+                    case 'poison_ant':
+                        baseSpeed = 3; baseDamage = 10; break; 
+                    case 'fast_fly':
+                        baseSpeed = 7; baseDamage = 5; size = 15; break;
+                    default:
+                        baseSpeed = 3; baseDamage = 15; break;
+                }
+                
+                const speedMultiplier = (type === 'fast_fly') ? 1.5 : 1; 
                 
                 enemies.push({ 
                     x, 
                     y, 
-                    size: 20, 
+                    size, 
                     type, 
                     speed: baseSpeed * multiplier * speedMultiplier, 
                     damage: baseDamage * multiplier, 
@@ -969,9 +991,9 @@
 
         function applyBurnEffect(damage) {
             if (!game.isShieldActive && !(Date.now() < game.invulnerabilityTimer)) {
-                game.health -= damage;
+                game.health -= damage; // Начальный урон 6
                 burnEffect.active = true;
-                burnEffect.endTime = Date.now() + burnEffect.duration;
+                burnEffect.endTime = Date.now() + burnEffect.duration; // 5 секунд
                 game.burnNextTick = Date.now() + 1000;
                 if (game.health <= 0) endGame();
             }
@@ -1020,8 +1042,9 @@
                 if (distToPlayer < PLAYER_SIZE/2 + e.size/2) {
                     if (!boss) { 
                         if (!game.isShieldActive && !isPlayerInvulnerable) { 
+                            
                             if (e.type === 'lava_roach') {
-                                applyBurnEffect(e.damage);
+                                applyBurnEffect(e.damage); // Наносится 6 урона + активируется горение
                             } else if (e.type === 'poison_ant') {
                                 applyPoisonEffect(e.damage);
                             } else if (e.type === 'ice_spider') {
@@ -1091,7 +1114,7 @@
         function updatePlayerEffects() {
             const now = Date.now();
             
-            // --- Эффект Горения ---
+            // --- Эффект Горения --- (Урон 1 HP/сек в течение 5 секунд)
             if (burnEffect.active) {
                 if (now >= burnEffect.endTime) {
                     burnEffect.active = false;
@@ -1153,7 +1176,6 @@
             }
         }
         
-        // ОБНОВЛЕННАЯ ФУНКЦИЯ ОРИСОВКИ ВРАГОВ (ПИКСЕЛЬНЫЕ ТЕКСТУРЫ)
         function drawEnemyShape(e, screenX, screenY) {
             const halfSize = e.size / 2;
             
@@ -1171,7 +1193,7 @@
                 case 'lava_roach':
                     CTX.fillStyle = '#ff6600'; // Ярко-оранжевый (Лава)
                     CTX.fillRect(screenX - halfSize, screenY - halfSize, e.size, e.size);
-                    if (Date.now() % 300 < 150) { // Эффект огня
+                    if (Date.now() % 300 < 150) { 
                         CTX.fillStyle = 'red';
                         CTX.fillRect(screenX - halfSize - 2, screenY - halfSize - 2, e.size + 4, e.size + 4);
                     }
@@ -1241,50 +1263,29 @@
         }
         
         function drawBackground(mapType) {
-            switch (mapType) {
-                case 'world':
-                    CTX.fillStyle = '#333'; 
-                    CTX.fillRect(0, 0, W, H);
-                    CTX.fillStyle = '#555'; 
-                    const segmentSize = 30;
-                    let roadOffset = (game.playerY * 0.5) % segmentSize;
-                    for (let i = -1; i < H / segmentSize + 1; i++) {
-                        const yPos = i * segmentSize + roadOffset;
-                        CTX.fillRect(W / 2 - 2, yPos, 4, 20); 
-                    }
-                    break;
-                case 'cave':
-                case 'deep_cave':
-                    CTX.fillStyle = '#221100'; 
-                    CTX.fillRect(0, 0, W, H);
-                    break;
-                case 'volcano':
-                case 'hell':
-                    CTX.fillStyle = '#4d0000'; 
-                    CTX.fillRect(0, 0, W, H);
-                    CTX.fillStyle = '#800000'; 
-                    for(let i=0; i<W; i+=20) CTX.fillRect(i, 0, 10, H);
-                    break;
-                case 'swamp':
-                case 'jungle':
-                    CTX.fillStyle = '#224422'; 
-                    CTX.fillRect(0, 0, W, H);
-                    break;
-                case 'winter':
-                case 'ocean':
-                    CTX.fillStyle = '#87cefa'; 
-                    CTX.fillRect(0, 0, W, H);
-                    break;
-                case 'desert':
-                case 'canyon':
-                case 'moon':
-                    CTX.fillStyle = '#f5deb3'; 
-                    CTX.fillRect(0, 0, W, H);
-                    break;
-                default:
-                    CTX.fillStyle = '#333'; 
-                    CTX.fillRect(0, 0, W, H);
-                    break;
+            const biome = BIOMES.find(b => b.id === mapType);
+            let bgColor = biome ? biome.color : '#333';
+            
+            // Если фон слишком яркий, затемняем его
+            if (['#FFD700', '#F0E68C', '#C0C0C0'].includes(bgColor)) {
+                 bgColor = '#555';
+            }
+
+            CTX.fillStyle = bgColor; 
+            CTX.fillRect(0, 0, W, H);
+
+            // Дополнительные детали для биомов
+            if (mapType === 'world') {
+                 CTX.fillStyle = '#555'; 
+                 const segmentSize = 30;
+                 let roadOffset = (game.playerY * 0.5) % segmentSize;
+                 for (let i = -1; i < H / segmentSize + 1; i++) {
+                     const yPos = i * segmentSize + roadOffset;
+                     CTX.fillRect(W / 2 - 2, yPos, 4, 20); 
+                 }
+            } else if (mapType === 'volcano' || mapType === 'hell') {
+                 CTX.fillStyle = '#800000'; 
+                 for(let i=0; i<W; i+=20) CTX.fillRect(i, 0, 10, H);
             }
         }
 
@@ -1520,7 +1521,7 @@
                     updateBoss(); 
                     checkCoinCollision();
                     updateObjects();
-                    updatePlayerEffects(); // Обновление эффектов горения/отравления/замедления
+                    updatePlayerEffects(); 
                 }
                 
                 draw();
@@ -1530,9 +1531,14 @@
                 killsDisplay.textContent = game.kills; 
                 
             } catch (error) {
-                 alert("Критическая ошибка: " + error.message + ". Игра будет перезагружена.");
-                 window.location.reload(); 
-                 return; 
+                 console.error("Критическая ошибка: " + error.message);
+                 // При возникновении критической ошибки переходим в меню, чтобы избежать бесконечного цикла
+                 if (game.state !== 'menu') {
+                    game.state = 'menu';
+                    menuScreen.style.display = 'flex';
+                    alert("Критическая ошибка! Игра остановлена. " + error.message);
+                 }
+                 // Не вызываем window.location.reload, чтобы не прерывать игру полностью.
             }
 
             gameLoopId = requestAnimationFrame(gameLoop);
