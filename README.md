@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Pixel Hunter: Scrollable Biomes</title>
+    <title>Pixel Hunter: Compact Biome Menu</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -63,7 +63,7 @@
 
 
         /* Скрытые/Полноэкранные меню */
-        #menu-screen, #shop-screen, #game-over-screen, #victory-screen {
+        #menu-screen, #shop-screen, #game-over-screen, #victory-screen, #all-levels-screen {
             position: absolute;
             top: 0;
             left: 0;
@@ -84,7 +84,7 @@
             background-color: rgba(0, 100, 0, 0.95);
         }
 
-        #menu-screen button, #game-over-screen button, #victory-screen button {
+        #menu-screen button, #game-over-screen button, #victory-screen button, #all-levels-screen button {
             padding: 15px 30px;
             margin: 10px;
             font-size: 0.8em;
@@ -94,32 +94,64 @@
             border-radius: 5px;
         }
         
-        /* === СТИЛИ ПРОКРУТКИ МЕНЮ УРОВНЕЙ === */
-        #menu-list {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr); 
+        /* === СТИЛИ КОМПАКТНОГО МЕНЮ === */
+        #main-menu-options {
+            display: flex;
+            flex-direction: column;
             gap: 10px;
-            max-width: 900px; 
-            margin: 20px auto;
-            max-height: 60vh; /* Ограничиваем высоту для прокрутки */
-            overflow-y: auto; /* Включаем вертикальную прокрутку */
-            padding-right: 15px; /* Для отступа от скроллбара */
+            margin-bottom: 20px;
         }
-        
-        .level-button {
-             padding: 10px 15px;
-             font-size: 0.7em;
+        .menu-biome-button {
+             padding: 15px 40px;
+             font-size: 0.9em;
              background-color: #008000;
              color: white;
              border: none;
              cursor: pointer;
              border-radius: 5px;
              transition: background-color 0.3s;
+             width: 300px;
+        }
+        
+        #view-all-button {
+             background-color: #FFA500; /* Оранжевый */
+             color: black;
+        }
+        
+        /* === СТИЛИ ПРОКРУТКИ МЕНЮ ВСЕХ УРОВНЕЙ === */
+        #all-levels-screen {
+            background-color: rgba(0, 0, 0, 0.95);
+        }
+
+        #all-levels-list {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* 3 уровня в ряд */
+            gap: 15px;
+            max-width: 800px; 
+            margin: 20px auto;
+            max-height: 70vh; /* Ограничиваем высоту для прокрутки */
+            overflow-y: auto; /* Включаем вертикальную прокрутку */
+            padding: 15px;
+            border: 2px solid #555;
+            border-radius: 10px;
+            background-color: rgba(50, 50, 50, 0.5);
+        }
+        
+        .level-button {
+             padding: 10px 15px;
+             font-size: 0.7em;
+             color: white;
+             border: none;
+             cursor: pointer;
+             border-radius: 5px;
+             transition: background-color 0.3s;
+             text-align: center;
         }
         .level-button[disabled] {
-             background-color: #444;
+             background-color: #444 !important;
              color: #999;
              cursor: not-allowed;
+             text-decoration: line-through;
         }
         /* ==================================== */
 
@@ -174,9 +206,18 @@
 
     <div id="menu-screen">
         <h1>PIXEL HUNTER: ВЫБОР БИОМА</h1>
-        <p>Выберите биом для старта:</p>
-        <div id="menu-list">
+        <p>Начните приключение:</p>
+        <div id="main-menu-options">
             </div>
+        <button id="view-all-button" onclick="showAllLevels()">ПОСМОТРЕТЬ ВСЕ БИОМЫ (4-20)</button>
+    </div>
+    
+    <div id="all-levels-screen">
+        <h2>ВСЕ БИОМЫ (УРОВНИ 4 - 20)</h2>
+        <p>Выберите более сложное испытание:</p>
+        <div id="all-levels-list">
+            </div>
+        <button onclick="hideAllLevels()" style="background-color: #888; color: white;">НАЗАД В МЕНЮ</button>
     </div>
     
     <div id="victory-screen">
@@ -230,7 +271,6 @@
         const PLAYER_SPEED = 4;
         const AGGRO_RADIUS = 200;
         const VIEW_RADIUS = 500;
-        const BOSS_KILL_THRESHOLD = 50; 
         
         // --- СПИСОК ВСЕХ 20 БИОМОВ (УРОВНЕЙ) ---
         const BIOMES = [
@@ -306,7 +346,7 @@
         // --- DOM ЭЛЕМЕНТЫ ---
         let scoreDisplay, coinsDisplay, healthDisplay, shieldDisplay, woodDisplay, killsDisplay;
         let pencilButton, cancelButton, shopButton, shopScreen, upgradeList, shopCoinsDisplay;
-        let gameOverScreen, finalScoreDisplay, menuScreen, victoryScreen, victoryMessage, menuList;
+        let gameOverScreen, finalScoreDisplay, menuScreen, victoryScreen, victoryMessage, mainMenuOptions, allLevelsScreen, allLevelsList;
         
         // --- ПЕРЕМЕННЫЕ ДЖОЙСТИКА ---
         let joystickBase, joystickKnob;
@@ -352,12 +392,26 @@
             updateMenuButtons();
         }
 
+        function showAllLevels() {
+            menuScreen.style.display = 'none';
+            allLevelsScreen.style.display = 'flex';
+            updateAllLevelsButtons();
+        }
+        
+        function hideAllLevels() {
+            allLevelsScreen.style.display = 'none';
+            menuScreen.style.display = 'flex';
+        }
+
+
         function updateMenuButtons() {
-            menuList.innerHTML = '';
-            BIOMES.forEach((biome, index) => {
-                const levelNum = index + 1;
+            // Обновление кнопок для основного меню (1-3 уровни)
+            mainMenuOptions.innerHTML = '';
+            for(let i = 0; i < 3; i++) {
+                const biome = BIOMES[i];
+                const levelNum = i + 1;
                 const button = document.createElement('button');
-                button.className = 'level-button';
+                button.className = 'menu-biome-button';
                 button.textContent = biome.name;
                 button.onclick = () => startGame(biome.id);
                 button.style.backgroundColor = biome.color; 
@@ -367,9 +421,29 @@
                     button.textContent += ' (Забл.)';
                     button.style.backgroundColor = '#444';
                 }
+                mainMenuOptions.appendChild(button);
+            }
+        }
+        
+        function updateAllLevelsButtons() {
+            // Обновление кнопок для всех уровней (4-20)
+            allLevelsList.innerHTML = '';
+            for(let i = 3; i < BIOMES.length; i++) { 
+                const biome = BIOMES[i];
+                const levelNum = i + 1;
+                const button = document.createElement('button');
+                button.className = 'level-button';
+                button.textContent = biome.name;
+                button.onclick = () => startGame(biome.id);
+                button.style.backgroundColor = biome.color; 
                 
-                menuList.appendChild(button);
-            });
+                if (levelNum > game.unlockedLevels) {
+                    button.disabled = true;
+                    button.textContent += ' (Забл.)';
+                }
+                
+                allLevelsList.appendChild(button);
+            }
         }
 
         function endGame() {
@@ -437,7 +511,7 @@
         }
 
         function enterShop() {
-            if (game.state !== 'menu' && game.state !== 'gameOver' && game.state !== 'victory') {
+            if (game.state !== 'menu' && game.state !== 'gameOver' && game.state !== 'victory' && game.state !== 'allLevels') {
                 game.state = 'shop';
                 shopScreen.style.display = 'flex';
                 updateShopList();
@@ -511,7 +585,7 @@
         }
 
         function movePlayer() {
-            if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory') return;
+            if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory' || game.state === 'allLevels') return;
 
             let dx = 0;
             let dy = 0;
@@ -593,6 +667,7 @@
                 rockets = [];
                 
                 menuScreen.style.display = 'none'; 
+                allLevelsScreen.style.display = 'none';
                 
                 shopButton.style.display = 'block';
                 joystickBase.style.display = 'flex';
@@ -660,7 +735,7 @@
         }
 
         function enterDrawingMode() {
-            if (game.hasPencil && game.state !== 'shop' && game.state !== 'menu') {
+            if (game.hasPencil && game.state !== 'shop' && game.state !== 'menu' && game.state !== 'allLevels') {
                 game.isDrawingMode = true;
                 pencilButton.style.display = 'none';
                 cancelButton.style.display = 'block';
@@ -671,7 +746,7 @@
         
         function exitDrawingMode() {
             game.isDrawingMode = false;
-            if (game.hasPencil && game.state !== 'shop') {
+            if (game.hasPencil && game.state !== 'shop' && game.state !== 'allLevels') {
                 pencilButton.style.display = 'block';
             }
             cancelButton.style.display = 'none';
@@ -682,10 +757,10 @@
         // --- ОБРАБОТКА ВВОДА КЛАВИАТУРЫ ---
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
-            if ((game.state !== 'menu' && game.state !== 'shop') && e.key.toUpperCase() === 'E') {
+            if ((game.state !== 'menu' && game.state !== 'shop' && game.state !== 'allLevels') && e.key.toUpperCase() === 'E') {
                 toggleShield();
             }
-            if ((game.state !== 'menu' && game.state !== 'shop') && e.key.toUpperCase() === 'X' && game.isDrawingMode) {
+            if ((game.state !== 'menu' && game.state !== 'shop' && game.state !== 'allLevels') && e.key.toUpperCase() === 'X' && game.isDrawingMode) {
                 exitDrawingMode(); 
             }
         });
@@ -696,7 +771,7 @@
         // === 2. СНАРЯДЫ И ЛОГИКА МУЛЬТИТАЧА (ИСПРАВЛЕНА) ===
         
         CANVAS.addEventListener('touchstart', (e) => {
-            if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory') return;
+            if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory' || game.state === 'allLevels') return;
             
             const rect = CANVAS.getBoundingClientRect();
             let bulletFired = false; 
@@ -736,7 +811,7 @@
         });
         
         CANVAS.addEventListener('click', (e) => {
-            if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory') return;
+            if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory' || game.state === 'allLevels') return;
             if (e.target.tagName === 'BUTTON') return; 
             
             const rect = CANVAS.getBoundingClientRect();
@@ -1290,7 +1365,7 @@
         }
 
         function draw() {
-            if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory') {
+            if (game.state === 'menu' || game.state === 'shop' || game.state === 'gameOver' || game.state === 'victory' || game.state === 'allLevels') {
                  CTX.clearRect(0, 0, W, H);
                  return;
             }
@@ -1389,9 +1464,11 @@
 
         function initDOM() {
             menuScreen = document.getElementById('menu-screen');
+            mainMenuOptions = document.getElementById('main-menu-options');
+            allLevelsScreen = document.getElementById('all-levels-screen');
+            allLevelsList = document.getElementById('all-levels-list');
             victoryScreen = document.getElementById('victory-screen'); 
             victoryMessage = document.getElementById('victory-message');
-            menuList = document.getElementById('menu-list');
 
             scoreDisplay = document.getElementById('score-display');
             coinsDisplay = document.getElementById('coins-display');
@@ -1427,6 +1504,7 @@
             }
 
             updateMenuButtons(); 
+            updateAllLevelsButtons(); 
             menuScreen.style.display = 'flex';
         }
 
@@ -1513,7 +1591,7 @@
 
         function gameLoop() {
             try {
-                if (game.state !== 'menu' && game.state !== 'shop' && game.state !== 'gameOver' && game.state !== 'victory') {
+                if (game.state !== 'menu' && game.state !== 'shop' && game.state !== 'gameOver' && game.state !== 'victory' && game.state !== 'allLevels') {
                     movePlayer();
                     updateBullets();
                     updateRockets(); 
